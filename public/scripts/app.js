@@ -38,6 +38,26 @@ renderer.code = function ({ text, lang }) {
 
 marked.use({ renderer });
 
+// marked 는 수식 안의 `_` 두 개를 강조(<em>)로 해석해버려서
+// `\text{Intra}_{p05} - \text{Inter}_{p95}` 같은 식이 깨진다.
+// 파싱 전에 수식 구간을 플레이스홀더로 빼두고, 파싱 후 원문 그대로 복원한다.
+// 코드블록/인라인 코드 안의 `$` 는 수식이 아니므로 건드리지 않는다.
+const CODE_OR_MATH = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|(\$\$[\s\S]+?\$\$|\$(?![\s$])(?:[^$\n]*[^\s$])?\$)/g;
+
+function escapeMathHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function parseMarkdownWithMath(markdown) {
+  const math = [];
+  const masked = markdown.replace(CODE_OR_MATH, (matched, code, expr) =>
+    code ? matched : `@@MATH${math.push(expr) - 1}@@`
+  );
+  return marked
+    .parse(masked)
+    .replace(/@@MATH(\d+)@@/g, (_, i) => escapeMathHtml(math[i]));
+}
+
 const POSTS_CACHE_KEY = 'posts_cache_v2';
 
 function getCachedPosts() {
@@ -233,7 +253,7 @@ async function showPostDetail(postId) {
     const contentEl = document.getElementById('post-content');
 
     demoCounter = 0;
-    const html = marked.parse(content);
+    const html = parseMarkdownWithMath(content);
 
     contentEl.innerHTML = `
       <h1>${meta.title}</h1>
