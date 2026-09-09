@@ -32,6 +32,7 @@ app.get('/api/posts', async (_, res) => {
 });
 
 app.get('/api/posts/:id', async (req, res) => {
+  res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
   res.json(await getPost(req.params.id));
 });
 
