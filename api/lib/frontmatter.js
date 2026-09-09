@@ -18,6 +18,8 @@ export function parseFrontmatter(content) {
 
     if (key === 'tags') {
       meta[key] = value.replace(/[[\]"]/g, '').split(',').map(t => t.trim());
+    } else if (key === 'series_order') {
+      meta[key] = Number(value);
     } else {
       meta[key] = value.replace(/^"(.*)"$/, '$1');
     }

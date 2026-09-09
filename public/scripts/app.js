@@ -62,7 +62,7 @@ async function fetchAnalytics(postId) {
   }
 }
 
-const POSTS_CACHE_KEY = 'posts_cache';
+const POSTS_CACHE_KEY = 'posts_cache_v2';
 
 function getCachedPosts() {
   try {
@@ -113,6 +113,8 @@ async function loadPosts() {
       category: post.category,
       tags: post.tags || [],
       excerpt: post.excerpt || '',
+      series: post.series || null,
+      seriesOrder: post.seriesOrder ?? null,
     }));
     setCachedPosts(posts);
     renderPosts();
@@ -141,10 +143,29 @@ function renderPosts() {
     return;
   }
   
-  filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  filtered.sort((a, b) => {
+    const byDate = new Date(b.date) - new Date(a.date);
+    if (byDate !== 0) return byDate;
+    // 같은 날짜: 같은 시리즈끼리 모으고, 시리즈 안에서는 편 순서대로
+    const bySeries = (a.series || '').localeCompare(b.series || '');
+    if (bySeries !== 0) return bySeries;
+    return (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0);
+  });
+
+  // 필터와 무관하게 시리즈 전체 편수를 세어 배지에 표시
+  const seriesTotals = posts.reduce((acc, p) => {
+    if (p.series) acc[p.series] = (acc[p.series] || 0) + 1;
+    return acc;
+  }, {});
   
   postsList.innerHTML = filtered.map(post => `
     <div class="post-item" data-post-id="${post.id}">
+      ${post.series ? `
+        <div class="post-item-series">
+          <span class="series-badge-name">${post.series} 시리즈</span>
+          <span class="series-badge-count">${post.seriesOrder} / ${seriesTotals[post.series]}</span>
+        </div>
+      ` : ''}
       <div class="post-item-header">
         <div>
           <h2 class="post-item-title">${post.title}</h2>
@@ -183,11 +204,60 @@ function renderPosts() {
   });
 }
 
+// 시리즈 목차 — posts 데이터에서 자동 생성 (현재 글 강조)
+function buildSeriesToc(meta, currentId) {
+  if (!meta.series) return '';
+
+  const parts = posts
+    .filter(p => p.series === meta.series)
+    .sort((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0));
+
+  if (parts.length === 0) return '';
+
+  const items = parts.map(p => {
+    const isCurrent = p.id === currentId;
+    const title = isCurrent
+      ? `<span class="series-toc-title">${p.title}<span class="series-toc-here">현재 글</span></span>`
+      : `<a class="series-toc-title" href="#" data-series-post="${p.id}">${p.title}</a>`;
+    return `
+      <li class="series-toc-item${isCurrent ? ' current' : ''}">
+        <span class="series-toc-num">${p.seriesOrder}</span>
+        ${title}
+      </li>`;
+  }).join('');
+
+  const repo = meta.series_repo ? `
+    <div class="series-toc-repo">
+      원본 예제 코드:
+      <a href="${meta.series_repo}" target="_blank" rel="noopener noreferrer">${meta.series_repo.replace(/^https?:\/\/(www\.)?github\.com\//, '')}</a>
+    </div>` : '';
+
+  return `
+    <nav class="series-toc" aria-label="${meta.series} 시리즈 목차">
+      <div class="series-toc-head">
+        <span class="series-toc-name">${meta.series} 시리즈</span>
+        <span class="series-toc-progress">${meta.series_order} / ${parts.length}</span>
+      </div>
+      <ol class="series-toc-list">${items}</ol>
+      ${repo}
+    </nav>`;
+}
+
 async function showPostDetail(postId, refresh = false) {
   try {
     // Markdown 원문 가져오기
     const res = await fetch(`${API_BASE}/posts/${postId}`);
     const { meta, content } = await res.json();
+
+    // 목록을 거치지 않고 바로 상세로 들어온 경우에도 목차를 만들 수 있게 보강
+    if (posts.length === 0) {
+      try {
+        const listRes = await fetch(`${API_BASE}/posts`);
+        posts = await listRes.json();
+      } catch {
+        // 목록을 못 가져오면 목차 없이 본문만 렌더링
+      }
+    }
     
 
     if (!refresh) recordView(postId, meta.title);
@@ -206,6 +276,8 @@ async function showPostDetail(postId, refresh = false) {
         <span>${new Date(meta.date).toLocaleDateString('ko-KR')} · ${meta.category}</span>
         <span>조회: 오늘 ${analytics.today} | 어제 ${analytics.yesterday} | 총 ${analytics.total}</span>
       </div>
+
+      ${buildSeriesToc(meta, postId)}
 
       <div>
         ${html}
@@ -228,6 +300,13 @@ async function showPostDetail(postId, refresh = false) {
             }
           }
         });
+      });
+    });
+
+    contentEl.querySelectorAll('[data-series-post]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPostDetail(link.dataset.seriesPost);
       });
     });
 

@@ -225,6 +225,131 @@ main {
   border-radius: 3px;
 }
 
+/* Series — 목록 카드 배지 */
+.post-item-series {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.series-badge-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--accent-color);
+  padding: 0.2rem 0.55rem;
+  background-color: #f0f6ff;
+  border-radius: 3px;
+}
+
+.series-badge-count {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--secondary-color);
+}
+
+/* Series — 상세 뷰 목차 */
+.series-toc {
+  border: 1px solid var(--light-border);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 4px;
+  background-color: #fafbfc;
+  padding: 1rem 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.series-toc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--light-border);
+}
+
+.series-toc-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.series-toc-progress {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--secondary-color);
+  white-space: nowrap;
+}
+
+.series-toc-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+}
+
+.series-toc-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.series-toc-num {
+  flex-shrink: 0;
+  width: 1.4rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--secondary-color);
+}
+
+.series-toc-item.current .series-toc-num {
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+a.series-toc-title {
+  color: var(--light-text);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+a.series-toc-title:hover {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+}
+
+.series-toc-item.current .series-toc-title {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.series-toc-here {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--accent-color);
+  background-color: #f0f6ff;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.series-toc-repo {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--light-border);
+  font-size: 0.83rem;
+  color: var(--secondary-color);
+}
+
+.series-toc-repo a {
+  color: var(--accent-color);
+}
+
 /* Post Detail View */
 .post-detail-view {
   display: none;
@@ -495,6 +620,19 @@ main {
 
   .post-item-tags {
     gap: 0.25rem;
+  }
+
+  .series-toc {
+    padding: 0.9rem 1rem;
+  }
+
+  .series-toc-head {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .series-toc-item {
+    font-size: 0.88rem;
   }
 }
 

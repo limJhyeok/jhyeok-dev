@@ -40,6 +40,8 @@ export async function getAllPosts() {
         category: meta.category,
         tags: meta.tags || [],
         excerpt: meta.summary || makeExcerpt(content),
+        series: meta.series || null,
+        seriesOrder: meta.series_order ?? null,
       };
     })
   );
