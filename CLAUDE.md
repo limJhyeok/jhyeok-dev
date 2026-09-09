@@ -17,9 +17,8 @@ This is a single-page blog with a Node.js/Express backend deployed on Vercel.
 
 ```
 api/
-  index.js          # Express app — all API routes, CORS, rate limiting
+  index.js          # Express app — all API routes, CORS
   lib/
-    kv.js           # KV abstraction: MemoryKV (local) / @upstash/redis (prod)
     posts.js        # getAllPosts(), getPost(id) — reads content/posts/*.md
     frontmatter.js  # parseFrontmatter(raw) → { meta, content }
 content/
@@ -36,7 +35,7 @@ There is no client-side router. The frontend toggles between two views:
 - **List view**: `.posts-section` visible, `#post-detail` hidden
 - **Detail view**: `.posts-section.hidden`, `#post-detail.active`
 
-`showPostDetail(postId, refresh=false)` drives the transition. Pass `refresh=true` to skip `recordView()` (e.g. after comment submit).
+`showPostDetail(postId)` drives the transition.
 
 ### Post loading flow
 
@@ -44,13 +43,11 @@ There is no client-side router. The frontend toggles between two views:
 2. Clicking a post → `showPostDetail(id)` → `GET /api/posts/:id` → `getPost(id)` returns `{ meta, content }` (already parsed)
 3. Frontend renders markdown via `marked.parse()`, then calls `renderMathInElement()` for KaTeX
 
-### KV (storage)
+Both post routes set `Cache-Control` (`s-maxage` + `stale-while-revalidate`) so Vercel's edge serves repeat reads without invoking the function.
 
-`api/lib/kv.js` checks `process.env.VERCEL === '1'`:
-- **Local**: in-memory `MemoryKV` (data lost on restart, no setup needed)
-- **Production**: `@upstash/redis` (Redis, requires env vars)
+### No database
 
-KV keys: `views:{post_id}:{YYYY-MM-DD}`, `views:{post_id}:total`, `comments:{post_id}`
+The blog is fully static-content driven — posts come from `content/posts/*.md` and nothing else is persisted. There was previously an Upstash Redis (Vercel KV) view counter; it was removed after the instance was deprovisioned. If you ever reintroduce per-post counters, do **not** block rendering on the fetch: render the post first and fill the number in asynchronously.
 
 ### Post frontmatter
 
@@ -68,14 +65,15 @@ summary: "Optional. If set, used as excerpt in list view instead of auto-generat
 
 ### Security decisions made
 
-- `escapeHtml()` in `app.js` — applied to all user-supplied comment fields before innerHTML insertion
-- Admin password: guarded with `!!process.env.ADMIN_PASSWORD &&` to prevent bypass when env var is unset
-- CORS: `ALLOWED_ORIGINS` env var (comma-separated); always allows `http://localhost:3000` in dev — **set `ALLOWED_ORIGINS` in Vercel before deploying**
-- Rate limiting: `express-rate-limit` on POST `/api/analytics/view` (30/min) and POST `/api/comments` (5/min)
+- CORS: `ALLOWED_ORIGINS` env var (comma-separated) — **set `ALLOWED_ORIGINS` in Vercel before deploying**. An empty value rejects every cross-origin request; same-origin requests (no `Origin` header) always pass.
+- There are no write endpoints and no user-supplied input is stored or rendered, so there is no HTML-escaping path to maintain. Reintroduce `escapeHtml()` before any innerHTML insertion if that changes.
+
+### Deployment
+
+`vercel.json` pins `regions: ["icn1"]` (Seoul) — the audience is Korean, and the default US region added 200ms+ per round trip.
 
 ### Environment variables
 
-See `.env.example`. Required for production:
-- `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_REST_API_READ_ONLY_TOKEN`, `KV_URL` — Vercel Storage(Upstash Redis)가 자동 주입
-- `ADMIN_PASSWORD` — comment admin auth
+See `.env.example`. All are optional; the app runs without any of them.
 - `ALLOWED_ORIGINS` — CORS whitelist (e.g. `https://your-blog.vercel.app`)
+- `GITHUB_URL`, `LINKEDIN_URL` — header social icons; unset renders them as disabled

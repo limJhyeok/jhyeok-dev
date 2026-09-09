@@ -1,4 +1,7 @@
 {
+  "regions": [
+    "icn1"
+  ],
   "functions": {
     "api/index.js": {
       "includeFiles": "content/**"

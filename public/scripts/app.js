@@ -38,30 +38,6 @@ renderer.code = function ({ text, lang }) {
 
 marked.use({ renderer });
 
-// API 함수들
-async function recordView(postId, postTitle) {
-  try {
-    await fetch(`${API_BASE}/analytics/view`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ post_id: postId, post_title: postTitle })
-    });
-  } catch (error) {
-    console.error('Failed to record view:', error);
-  }
-}
-
-async function fetchAnalytics(postId) {
-  try {
-    const response = await fetch(`${API_BASE}/analytics/${postId}`);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch analytics:', error);
-    return { today: 0, yesterday: 0, total: 0 };
-  }
-}
-
 const POSTS_CACHE_KEY = 'posts_cache_v2';
 
 function getCachedPosts() {
@@ -179,19 +155,12 @@ function renderPosts() {
           ${post.tags.map(tag => `<span class="post-tag">#${tag}</span>`).join('')}
         </div>
       ` : ''}
-      <div class="post-item-stats" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0; font-size: 0.85rem; color: #999;">
-        조회수: <span class="view-count">-</span>
-      </div>
     </div>
   `).join('');
   
   document.querySelectorAll('.post-item').forEach(item => {
     const postId = item.dataset.postId;
     item.addEventListener('click', () => showPostDetail(postId));
-
-    fetchAnalytics(postId).then(analytics => {
-      item.querySelector('.view-count').textContent = analytics.total;
-    });
   });
 
   document.querySelectorAll('.post-item-excerpt').forEach(el => {
@@ -243,7 +212,7 @@ function buildSeriesToc(meta, currentId) {
     </nav>`;
 }
 
-async function showPostDetail(postId, refresh = false) {
+async function showPostDetail(postId) {
   try {
     // Markdown 원문 가져오기
     const res = await fetch(`${API_BASE}/posts/${postId}`);
@@ -260,12 +229,8 @@ async function showPostDetail(postId, refresh = false) {
     }
     
 
-    if (!refresh) recordView(postId, meta.title);
-
     const modal = document.getElementById('post-detail');
     const contentEl = document.getElementById('post-content');
-
-    const analytics = await fetchAnalytics(postId);
 
     demoCounter = 0;
     const html = marked.parse(content);
@@ -274,7 +239,6 @@ async function showPostDetail(postId, refresh = false) {
       <h1>${meta.title}</h1>
       <div style="display:flex;justify-content:space-between;margin-bottom:2rem;color:#666;font-size:0.9rem;">
         <span>${new Date(meta.date).toLocaleDateString('ko-KR')} · ${meta.category}</span>
-        <span>조회: 오늘 ${analytics.today} | 어제 ${analytics.yesterday} | 총 ${analytics.total}</span>
       </div>
 
       ${buildSeriesToc(meta, postId)}
