@@ -4,6 +4,9 @@ date: 2026-09-09
 category: ai
 summary: 공개 통계 문서 하나와 12건짜리 소량 데이터셋으로 RAG 시스템을 E2E + 구성요소별로 평가하고, 실패 사례에서 개선점을 도출한 기록
 tags: ["RAG", "LLM", "Evaluation", "LLM-as-a-Judge"]
+series: RAG 평가
+series_order: 2
+series_repo: https://github.com/limJhyeok/evalrag
 ---
 
 > **TL;DR**
@@ -454,6 +457,7 @@ RAG 시스템은 얼핏 보면 단순히 *검색(Retrieval)* 과 *생성(Generat
     - [저작권 안내](https://www.korea.kr/guide/copyRight.do): 저작물의 출처를 구체적으로 표시하여야 합니다. (자유이용이라고 하더라도 작성된 기사의 본래 취지와 의도에서 벗어난 변경 및 이용에 대해 책임이 있음을 알립니다.)
 2. [GeekNews — 관련 토픽](https://news.hada.io/topic?id=23812)
 3. [LangChain — Build a RAG agent](https://docs.langchain.com/oss/javascript/langchain/rag#build-a-rag-agent-with-langchain)
+4. 평가 코드 저장소: [limJhyeok/evalrag](https://github.com/limJhyeok/evalrag)
 
 ---
 

@@ -4,6 +4,9 @@ date: 2026-09-09
 category: ai
 summary: RAG 시스템 평가의 목적부터 구성요소별 평가 개념, 대표 지표, 안전성·효율성 평가까지 정리하고 RAG vs GraphRAG 비교 논문을 사례로 살펴봅니다
 tags: ["RAG", "GraphRAG", "LLM", "Evaluation", "Benchmark"]
+series: RAG 평가
+series_order: 1
+series_repo: https://github.com/limJhyeok/evalrag
 ---
 
 > 이 글은 RAG 평가의 **개념과 지표 지도(map)** 를 정리한 글입니다.
