@@ -1,7 +1,7 @@
 {
   "name": "limjhyeok-blog",
   "version": "1.0.0",
-  "description": "LimJhyeok's personal blog with analytics and comments",
+  "description": "LimJhyeok's personal blog",
   "main": "api/index.js",
   "type": "module",
   "scripts": {
@@ -19,11 +19,9 @@
   "author": "LimJhyeok",
   "license": "MIT",
   "dependencies": {
-    "@upstash/redis": "^1.36.3",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
-    "express": "^4.18.2",
-    "express-rate-limit": "^7.4.0"
+    "express": "^4.18.2"
   },
   "engines": {
     "node": "20.x"
