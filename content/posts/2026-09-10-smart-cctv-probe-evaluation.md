@@ -269,6 +269,8 @@ LOO가 답해주는 것은 하나입니다.**이 CCTV 영상 집합 안에서 �
 
 리포트에는 **전역과 층화(Stratified)를 둘 다** 싣습니다. 전역만 실으면 "품질 지표는 무의미하다"는 잘못된 결론이 남고, 층화만 실으면 "인물을 모르는 실제 게이팅 상황에서는 이만큼 안 나온다"는 사실이 사라집니다.
 
+>이 방식은 통계학에서 covariate-adjusted AUC(또는 covariate-specific ROC curve의 가중평균)라고 불리는 개념과 같은 뼈대입니다. 원래는 역학·생물통계 분야에서 "환자 나이·성별 등의 교란변수를 통제한 채 바이오마커의 진단력을 평가"하기 위해 고안된 방법인데, 여기서는 "인물"이 그 교란변수(공변량) 역할을 합니다. (참고: [Janes, H. & Pepe, M.S. — "Adjusting for Covariates in Studies of Diagnostic, Screening, or Prognostic Markers"](https://pubmed.ncbi.nlm.nih.gov/18477651/))
+
 ### 6-3. 신뢰구간은 인물 단위로 재표집(Resample)한다
 
 품질 점수 후보 하나의 AUROC가 **0.58**로 나왔다고 해봅시다. 우연 수준인 0.5보다 높으니 게이트에 넣어도 될까요. 아직 아닙니다. 이 숫자 하나로는 **소수의 인물이 신호를 통째로 끌고 있는 경우**를 걸러낼 수 없습니다.
@@ -333,8 +335,6 @@ print(f"95% CI (cluster bootstrap): [{ci_lower:.3f}, {ci_upper:.3f}]")
 *후보별 예측력과 인물 단위 부트스트랩 신뢰구간. 하한이 0.5를 넘는 세 후보만 게이팅에 쓸 수 있고, 난수 앵커와 구간이 겹치는 후보는 탈락입니다*
 
 여기서 직관과 어긋나는 결과가 자주 나옵니다. "화질이 나쁘면 못 알아본다"는 상식과 달리, 블러 지표나 박스 크기가 단독 기준으로는 신뢰구간을 통과하지 못하는 경우가 있습니다. 상식을 지표로 확인하는 것이 이 절의 목적입니다.
-
->이 방식은 통계학에서 covariate-adjusted AUC(또는 covariate-specific ROC curve의 가중평균)라고 불리는 개념과 같은 뼈대입니다. 원래는 역학·생물통계 분야에서 "환자 나이·성별 등의 교란변수를 통제한 채 바이오마커의 진단력을 평가"하기 위해 고안된 방법인데, 여기서는 "인물"이 그 교란변수(공변량) 역할을 합니다. (참고: [Janes, H. & Pepe, M.S. — "Adjusting for Covariates in Studies of Diagnostic, Screening, or Prognostic Markers"](https://pubmed.ncbi.nlm.nih.gov/18477651/))
 
 ### 6-4. 최종 결정은 AUROC가 아니라 ERC로 한다
 
