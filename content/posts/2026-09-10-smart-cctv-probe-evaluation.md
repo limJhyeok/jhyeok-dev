@@ -210,13 +210,13 @@ LOO가 답해주는 것은 하나입니다.**이 CCTV 영상 집합 안에서 �
 
 > **참고 — ERC 곡선을 읽는 법**
 >
-> ERC는 인식 모델이 아니라 **품질 평가 모델(FIQA)의 선별 능력**을 재는 곡선입니다. ROC나 DET가 인식 모델(Matcher) 자체의 성능을 잰다면, ERC는 그 앞단에서 **무엇을 버릴지 고르는 능력**을 잽니다. 세로축의 오류율로 문헌에서는 보통 FNMR(False Non-Match Rate)을 쓰지만, 이 글은 4절에서 rank-1로 식별 성패를 판정했으므로 그에 대응하는 rank-1 오류율을 놓았습니다.
+> ERC는 인식 모델이 아니라 **품질 평가 모델(FIQA)의 선별 능력**을 측정하는 곡선입니다. ROC나 DET가 인식 모델(Matcher) 자체의 성능을 잰다면, ERC는 그 앞단에서 **무엇을 버릴지 고르는 능력**을 잽니다. 세로축의 오류율로 문헌에서는 보통 FNMR(False Non-Match Rate)을 쓰지만, 이 글은 4절에서 rank-1로 식별 성패를 판정했으므로 그에 대응하는 rank-1 오류율을 놓았습니다.
 >
 > 읽을 때 보는 것은 세 가지입니다.
 >
 > - **버린 비율 0에서의 오류율** — 아무것도 버리지 않았을 때의 기본 인식 성능. 이 글에서는 4절 LOO rank-1의 오류율에 해당합니다.
 > - **곡선의 기울기** — 조금만 버렸는데도 오류율이 급하게 떨어지면, 품질 점수가 실제 인식 난이도를 정확히 반영한다는 뜻입니다. 반대로 완만하다면 인식 성패와 무관한 기준을 품질로 착각하고 있다는 의미입니다.
-> - **AUEC(Area Under ERC)** — ERC 곡선 아래 면적으로 선별 능력을 단일 수치로 요약합니다. 오류율을 세로축에 놓은 곡선이므로 **면적이 작을수록** 좋습니다. 6절에서 쓰는 AUROC와 이름만 비슷하고 다른 값입니다. AUROC는 품질 점수가 정오를 얼마나 잘 순서 매기는지를 재는 ROC 곡선의 면적이라 **클수록** 좋습니다.
+> - **AUEC(Area Under ERC)** — ERC 곡선 아래 면적으로 선별 능력을 단일 수치로 요약합니다. 오류율을 세로축에 놓은 곡선이므로 **면적이 작을수록** 좋습니다. 6절에서 쓰는 AUROC와 이름만 비슷하고 다른 값입니다. AUROC는 품질 점수가 정오를 얼마나 잘 순서 매기는지를 측정하는 ROC 곡선의 면적이라 **클수록** 좋습니다.
 >
 > 곡선끼리 비교할 때는 **같은 버린 비율 구간에서** 봐야 합니다. 많이 버리면 어떤 점수를 써도 오류율은 내려가므로, 버린 비율을 맞추지 않은 비교는 성립하지 않습니다.
 
@@ -235,7 +235,7 @@ LOO가 답해주는 것은 하나입니다.**이 CCTV 영상 집합 안에서 �
 
 5절에서 간격을 확인했다면, 이제 정답 없이 계산되는 점수로 그 간격을 얼마나 메울 수 있는지 봅니다.
 
-여기서 검증을 건너뛰면 **좋은 프레임을 버리고 나쁜 프레임을 남기는 게이트**를 만들어 놓고 성능이 왜 안 오르는지 모르게 됩니다. 그래서 4절에서 나온 프로브별 정오(맞았는가 / 틀렸는가)를 정답으로 두고, 각 점수 후보가 그 정오를 얼마나 잘 예측하는지 AUROC로 재는 것부터 시작합니다.
+여기서 검증을 건너뛰면 **좋은 프레임을 버리고 나쁜 프레임을 남기는 게이트**를 만들어 놓고 성능이 왜 안 오르는지 모르게 됩니다. 그래서 4절에서 나온 프로브별 정오(맞았는가 / 틀렸는가)를 정답으로 두고, 각 점수 후보가 그 정오를 얼마나 잘 예측하는지 AUROC로 측정하는 것부터 시작합니다.
 
 ### 6-1. 후보를 출처별로 세운다
 
@@ -247,7 +247,7 @@ LOO가 답해주는 것은 하나입니다.**이 CCTV 영상 집합 안에서 �
 | **박스 크기** | 얼굴 최소변 px |
 | **앵커** | Random(난수) |
 
-[SER-FIQ](https://arxiv.org/abs/2003.09373)는 Dropout을 켠 상태로 같은 얼굴을 여러 번 통과시켜, 임베딩이 얼마나 흔들리는지를 재는 방식입니다. 흔들림이 작을수록 그 얼굴이 모델에게 안정적으로 보인다는 뜻입니다. 단, **Dropout module 없이 학습된 모델에서는 SER-FIQ 값을 신뢰할 수 없습니다.** [공식 구현](https://github.com/pterhoer/FaceImageQuality)이 forward pass마다 dropout mask를 다르게 걸어 그 편차를 재는 구조이므로, dropout layer가 없으면 흔들림 자체가 발생하지 않습니다.
+[SER-FIQ](https://arxiv.org/abs/2003.09373)는 Dropout을 켠 상태로 같은 얼굴을 여러 번 통과시켜, 임베딩이 얼마나 흔들리는지를 측정하는 방식입니다. 흔들림이 작을수록 그 얼굴이 모델에게 안정적으로 보인다는 뜻입니다. 단, **Dropout module 없이 학습된 모델에서는 SER-FIQ 값을 신뢰할 수 없습니다.** [공식 구현](https://github.com/pterhoer/FaceImageQuality)이 forward pass마다 dropout mask를 다르게 걸어 그 편차를 측정하는 구조이므로, dropout layer가 없으면 흔들림 자체가 발생하지 않습니다.
 
 여기서 두 가지 설계가 중요합니다.
 
@@ -279,6 +279,48 @@ CCTV 영상은 인물별 프로브 수가 심하게 치우칩니다. 한 카메�
 
 방법은 이렇습니다. 프로브를 한 장씩 섞는 대신 **인물을 단위로 통째로** 복원추출해 가상의 데이터셋을 수천 개 만들고, 그때마다 AUROC를 다시 계산합니다. 이렇게 원본 표본을 재조합해 지표의 흔들림을 재는 기법을 **부트스트랩(Bootstrap)** 이라고 부릅니다. 수천 개의 값에서 위아래 2.5%씩을 잘라내면 **95% 신뢰구간**이 되고, 이 구간은 "어떤 인물 조합이 걸리느냐에 따라 성적이 어디까지 오르내리는가"를 보여줍니다.
 
+```py
+import numpy as np
+from sklearn.metrics import roc_auc_score
+
+def stratified_auroc(score: np.ndarray, label: np.ndarray, group: np.ndarray) -> float | None:
+    """인물 안에서만 AUROC를 측정하고, 인물별 (정답,오답) 쌍 개수로 가중평균."""
+    total_weighted, weight_sum = 0.0, 0.0
+    for person in np.unique(group):
+        selected_idx = group == person
+        n_pos, n_neg = label[selected_idx].sum(), (~label[selected_idx]).sum()
+        if n_pos == 0 or n_neg == 0:
+            continue
+        weight = n_pos * n_neg
+        total_weighted += roc_auc_score(label[selected_idx], score[selected_idx]) * weight
+        weight_sum += weight
+    return total_weighted / weight_sum if weight_sum else None
+
+person_ids = np.array(["P001", "P001", "P001", "P002", "P002"])
+labels = np.array([1, 1, 0, 1, 0])  # 예: 1=매칭 성공, 0=매칭 실패
+scores = np.array([0.82, 0.75, 0.61, 0.55, 0.30])  # 품질 점수 (0~1)
+
+unique_persons = np.unique(person_ids)  # → array(["P001", "P002"])
+n_bootstrap = 10000
+bootstrap_aurocs = []
+
+for _ in range(n_bootstrap):
+    # 1) 인물을 복원추출 (프로브가 아니라 "사람"을 뽑는다)
+    sampled_persons = np.random.choice(unique_persons, size=len(unique_persons), replace=True)
+
+    # 2) 뽑힌 인물의 프로브를 통째로 가져온다 (같은 사람이 여러 번 뽑히면 그만큼 중복 포함)
+    idx = np.concatenate([np.where(person_ids == p)[0] for p in sampled_persons])
+
+    value = stratified_auroc(score = scores[idx], label = labels[idx], group = person_ids[idx])
+    if value is None:  # 실패 라벨을 가진 인물이 하나도 안 뽑히는 등, 정의 불가한 회차는 스킵
+        continue
+
+    bootstrap_aurocs.append(value)
+
+ci_lower, ci_upper = np.percentile(bootstrap_aurocs, [2.5, 97.5])
+print(f"95% CI (cluster bootstrap): [{ci_lower:.3f}, {ci_upper:.3f}]")
+```
+
 판정은 점추정치가 아니라 구간의 **하한**으로 합니다.
 
 - **탈락 — 점추정치 0.58, 구간 [0.48, 0.68]**: 인물 조합이 불리하게 걸리면 0.48까지, 즉 우연 수준 아래로 내려갑니다. 0.58은 특정 몇 명 덕에 나온 값입니다.
@@ -291,6 +333,8 @@ CCTV 영상은 인물별 프로브 수가 심하게 치우칩니다. 한 카메�
 *후보별 예측력과 인물 단위 부트스트랩 신뢰구간. 하한이 0.5를 넘는 세 후보만 게이팅에 쓸 수 있고, 난수 앵커와 구간이 겹치는 후보는 탈락입니다*
 
 여기서 직관과 어긋나는 결과가 자주 나옵니다. "화질이 나쁘면 못 알아본다"는 상식과 달리, 블러 지표나 박스 크기가 단독 기준으로는 신뢰구간을 통과하지 못하는 경우가 있습니다. 상식을 지표로 확인하는 것이 이 절의 목적입니다.
+
+>이 방식은 통계학에서 covariate-adjusted AUC(또는 covariate-specific ROC curve의 가중평균)라고 불리는 개념과 같은 뼈대입니다. 원래는 역학·생물통계 분야에서 "환자 나이·성별 등의 교란변수를 통제한 채 바이오마커의 진단력을 평가"하기 위해 고안된 방법인데, 여기서는 "인물"이 그 교란변수(공변량) 역할을 합니다. (참고: [Janes, H. & Pepe, M.S. — "Adjusting for Covariates in Studies of Diagnostic, Screening, or Prognostic Markers"](https://pubmed.ncbi.nlm.nih.gov/18477651/))
 
 ### 6-4. 최종 결정은 AUROC가 아니라 ERC로 한다
 
@@ -403,3 +447,4 @@ Probe Quality Evaluation의 핵심은 **점수 자체가 아니라 점수를 어
 - 4-3의 LR-LR / HR-LR 비교, 7-1의 $112 \times 112$ 기준: [Luevano, Öztürk, Otroshi Shahreza, George, Marcel, *Improving Low-Resolution Face Recognition under Limited Data: How Synthetic Data Generation Can Close the Domain Gap*, Idiap Research Institute, IJCB 2026](https://arxiv.org/abs/2608.06580)
 - 5-2 ERC 곡선의 명칭과 축 정의(ERC/EDC): [Schlett et al., *Face Image Quality Assessment: A Literature Survey*, ACM Computing Surveys 2022](https://arxiv.org/abs/2009.01103)
 - 7-1에서 언급한 임베더: [fal/AuraFace-v1 (Hugging Face)](https://huggingface.co/fal/AuraFace-v1)
+- [Janes, H. & Pepe, M.S. — "Adjusting for Covariates in Studies of Diagnostic, Screening, or Prognostic Markers"](https://pubmed.ncbi.nlm.nih.gov/18477651/)
