@@ -1,6 +1,7 @@
 // 글 데이터 저장소
 let posts = [];
 let currentFilter = 'all';
+let currentSeries = null; // 시리즈 글 목록을 보는 중이면 시리즈 이름
 let currentPage = 1;
 const PAGE_SIZE = 5;
 const API_BASE = '/api';
@@ -140,9 +141,12 @@ async function loadPosts() {
 // ---- 해시 라우팅 ----
 // #/            전체 목록 1페이지      #/2       전체 목록 2페이지
 // #/dev         카테고리 목록 1페이지   #/ai/3    카테고리 목록 3페이지
+// #/series      시리즈 목록            #/series/<이름>/2  시리즈 글 2페이지
 // #/post/<id>   글 상세
 // 그 외(본문 각주의 #appendix 같은 인-페이지 앵커)는 라우트가 아니므로 건드리지 않는다.
 const POST_ROUTE_PREFIX = 'post/';
+// 첫 세그먼트로 예약된 이름 — 같은 이름의 카테고리는 만들 수 없다
+const SERIES_ROUTE = 'series';
 
 function parseRoute() {
   const hash = location.hash;
@@ -155,8 +159,16 @@ function parseRoute() {
   }
 
   // 숫자만인 세그먼트는 페이지 번호, 아니면 카테고리 (카테고리명과 겹치지 않는다)
-  const [first = '', second = ''] = raw.split('/');
+  const [first = '', second = '', third = ''] = raw.split('/');
   const isPageNum = seg => /^\d+$/.test(seg);
+
+  if (first === SERIES_ROUTE) {
+    // 이름이 없으면(#/series) 시리즈 목록, 있으면 그 시리즈의 글 목록
+    const name = isPageNum(second) ? '' : second;
+    const pageSeg = name ? third : '';
+    return { view: 'series', series: name || null, page: isPageNum(pageSeg) ? Number(pageSeg) : 1 };
+  }
+
   const filter = isPageNum(first) ? 'all' : first || 'all';
   const pageSeg = isPageNum(first) ? first : second;
   return { view: 'list', filter, page: isPageNum(pageSeg) ? Number(pageSeg) : 1 };
@@ -164,6 +176,12 @@ function parseRoute() {
 
 function routeToHash(route) {
   if (route.view === 'post') return `#/${POST_ROUTE_PREFIX}${encodeURIComponent(route.id)}`;
+
+  if (route.view === 'series') {
+    const name = route.series ? encodeURIComponent(route.series) : '';
+    const seriesPage = (route.page ?? 1) > 1 && name ? String(route.page) : '';
+    return `#/${[SERIES_ROUTE, name, seriesPage].filter(Boolean).join('/')}`;
+  }
 
   const filter = route.filter === 'all' ? '' : encodeURIComponent(route.filter);
   const page = (route.page ?? 1) > 1 ? String(route.page) : '';
@@ -187,9 +205,20 @@ function applyRoute() {
   if (route === null) return; // 인-페이지 앵커 — 화면 전환 없음
 
   if (route.view === 'list') {
+    currentSeries = null;
     setFilter(route.filter);
     // 범위 밖 페이지(#/dev/9 같은 링크)는 마지막 페이지로 보정한다
     currentPage = Math.min(Math.max(1, route.page), totalPages());
+    route.page = currentPage;
+  }
+
+  if (route.view === 'series') {
+    // 없는 시리즈를 가리키는 주소는 빈 목록 대신 시리즈 목록으로 되돌린다
+    const known = route.series && posts.some(p => p.series === route.series);
+    route.series = known ? route.series : null;
+    currentSeries = route.series;
+    setFilter(SERIES_ROUTE);
+    currentPage = route.series ? Math.min(Math.max(1, route.page), totalPages()) : 1;
     route.page = currentPage;
   }
 
@@ -205,6 +234,9 @@ function applyRoute() {
 
   if (route.view === 'post') {
     showPostDetail(route.id);
+  } else if (route.view === 'series' && !route.series) {
+    renderSeriesIndex();
+    showListView();
   } else {
     renderPosts();
     showListView(); // 글 상세를 보던 중이면 목록으로 되돌려야 필터 결과가 보인다
@@ -212,7 +244,19 @@ function applyRoute() {
 }
 
 function filteredPosts() {
+  if (currentSeries) {
+    return posts
+      .filter(post => post.series === currentSeries)
+      .sort((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0));
+  }
   return currentFilter === 'all' ? posts : posts.filter(post => post.category === currentFilter);
+}
+
+// 목록으로 돌아가는 라우트 — 시리즈를 보던 중이면 그 시리즈로 돌아간다
+function listRoute(page = currentPage) {
+  return currentSeries
+    ? { view: 'series', series: currentSeries, page }
+    : { view: 'list', filter: currentFilter, page };
 }
 
 function totalPages() {
@@ -225,6 +269,11 @@ function setFilter(filter) {
   const known = buttons.some(b => b.dataset.filter === filter);
   currentFilter = known ? filter : 'all';
   buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === currentFilter));
+
+  // 모바일 한 줄 헤더에서는 활성 버튼이 가로 스크롤 밖에 있을 수 있어 끌어온다
+  buttons
+    .find(b => b.classList.contains('active'))
+    ?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
 }
 
 // 7페이지까지는 번호를 전부, 그 이상은 1 … 4 5 6 … 10 형태로 축약
@@ -267,8 +316,7 @@ function renderPagination(total) {
     btn('→', currentPage + 1, { disabled: currentPage === pages });
 
   nav.querySelectorAll('.page-btn[data-page]').forEach(el => {
-    el.addEventListener('click', () =>
-      navigate({ view: 'list', filter: currentFilter, page: Number(el.dataset.page) }));
+    el.addEventListener('click', () => navigate(listRoute(Number(el.dataset.page))));
   });
 }
 
@@ -283,7 +331,8 @@ function renderPosts() {
     return;
   }
   
-  filtered.sort((a, b) => {
+  // 시리즈 목록은 filteredPosts() 가 이미 편 순서로 정렬해 뒀다 — 날짜순으로 뒤집지 않는다
+  if (!currentSeries) filtered.sort((a, b) => {
     const byDate = new Date(b.date) - new Date(a.date);
     if (byDate !== 0) return byDate;
     // 같은 날짜: 같은 시리즈끼리 모으고, 시리즈 안에서는 편 순서대로
@@ -298,8 +347,18 @@ function renderPosts() {
     return acc;
   }, {});
   
+  const seriesHead = currentSeries ? `
+    <div class="series-head">
+      <button class="series-back">← 시리즈 목록</button>
+      <div class="series-head-title">
+        <h2 class="series-head-name">${currentSeries}</h2>
+        <span class="series-head-count">${filtered.length}편</span>
+      </div>
+    </div>
+  ` : '';
+
   const pageStart = (currentPage - 1) * PAGE_SIZE;
-  postsList.innerHTML = filtered.slice(pageStart, pageStart + PAGE_SIZE).map(post => `
+  postsList.innerHTML = seriesHead + filtered.slice(pageStart, pageStart + PAGE_SIZE).map(post => `
     <div class="post-item" data-post-id="${post.id}">
       ${post.series ? `
         <div class="post-item-series">
@@ -325,6 +384,9 @@ function renderPosts() {
 
   renderPagination(filtered.length);
 
+  postsList.querySelector('.series-back')
+    ?.addEventListener('click', () => navigate({ view: 'series', series: null }));
+
   document.querySelectorAll('.post-item').forEach(item => {
     const postId = item.dataset.postId;
     item.addEventListener('click', () => navigate({ view: 'post', id: postId }));
@@ -337,6 +399,51 @@ function renderPosts() {
         { left: '$', right: '$', display: false },
       ]
     });
+  });
+}
+
+// 시리즈별 요약 — 편수, 1편, 가장 최근 글 (최근 글이 있는 시리즈가 위로)
+function seriesSummaries() {
+  const grouped = posts.reduce((acc, post) => {
+    if (post.series) (acc[post.series] ||= []).push(post);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped)
+    .map(([name, parts]) => {
+      const ordered = [...parts].sort((a, b) => (a.seriesOrder ?? 0) - (b.seriesOrder ?? 0));
+      const latest = parts.reduce((a, b) => (new Date(b.date) > new Date(a.date) ? b : a));
+      return { name, count: parts.length, first: ordered[0], latest };
+    })
+    .sort((a, b) => new Date(b.latest.date) - new Date(a.latest.date));
+}
+
+// 시리즈 목록 화면 (#/series) — 카드를 누르면 그 시리즈의 글만 보여준다
+function renderSeriesIndex() {
+  const postsList = document.getElementById('posts-list');
+  const all = seriesSummaries();
+
+  if (all.length === 0) {
+    postsList.innerHTML = '<div class="empty-state"><p>아직 시리즈가 없습니다.</p></div>';
+    renderPagination(0);
+    return;
+  }
+
+  postsList.innerHTML = all.map(s => `
+    <div class="series-card" data-series="${s.name}">
+      <div class="series-card-head">
+        <h2 class="series-card-name">${s.name}</h2>
+        <span class="series-card-count">${s.count}편</span>
+      </div>
+      <p class="series-card-excerpt">${s.first.title}</p>
+      <p class="series-card-date">최신 글 ${new Date(s.latest.date).toLocaleDateString('ko-KR')}</p>
+    </div>
+  `).join('');
+
+  renderPagination(0); // 시리즈 목록은 페이지를 나누지 않는다
+
+  postsList.querySelectorAll('.series-card').forEach(card => {
+    card.addEventListener('click', () => navigate({ view: 'series', series: card.dataset.series }));
   });
 }
 
@@ -503,14 +610,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // history.back() 을 쓰면 시리즈 목차로 글 A → 글 B 를 오간 뒤에
   // '목록으로' 가 글 A 로 가버리므로, 목록 라우트를 새로 쌓는다
   document.querySelector('.back-btn')
-    .addEventListener('click', () =>
-      navigate({ view: 'list', filter: currentFilter, page: currentPage }));
+    .addEventListener('click', () => navigate(listRoute()));
   loadProfile();
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      navigate({ view: 'list', filter: btn.dataset.filter });
+      navigate(btn.dataset.filter === SERIES_ROUTE
+        ? { view: 'series', series: null }
+        : { view: 'list', filter: btn.dataset.filter });
     });
   });
 
@@ -519,6 +627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 새로고침/딥링크 복원 — 목록을 그리기 전에 필터부터 확정한다
   const initial = parseRoute();
   if (initial?.view === 'list') setFilter(initial.filter);
+  if (initial?.view === 'series') setFilter(SERIES_ROUTE);
   await loadPosts();
   applyRoute();
 });
