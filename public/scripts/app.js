@@ -135,6 +135,68 @@ async function loadPosts() {
 
 
 
+// ---- 해시 라우팅 ----
+// #/            전체 목록
+// #/dev         카테고리 목록
+// #/post/<id>   글 상세
+// 그 외(본문 각주의 #appendix 같은 인-페이지 앵커)는 라우트가 아니므로 건드리지 않는다.
+const POST_ROUTE_PREFIX = 'post/';
+
+function parseRoute() {
+  const hash = location.hash;
+  if (hash === '' || hash === '#') return { view: 'list', filter: 'all' };
+  if (!hash.startsWith('#/')) return null;
+
+  const raw = decodeURIComponent(hash.slice(2));
+  if (raw.startsWith(POST_ROUTE_PREFIX)) {
+    return { view: 'post', id: raw.slice(POST_ROUTE_PREFIX.length) };
+  }
+  return { view: 'list', filter: raw || 'all' };
+}
+
+function routeToHash(route) {
+  return route.view === 'post'
+    ? `#/${POST_ROUTE_PREFIX}${encodeURIComponent(route.id)}`
+    : route.filter === 'all' ? '#/' : `#/${encodeURIComponent(route.filter)}`;
+}
+
+// 클릭은 해시만 바꾸고, 실제 렌더링은 applyRoute 한 곳에서만 한다
+function navigate(route) {
+  const hash = routeToHash(route);
+  if (location.hash === hash) {
+    applyRoute(); // 같은 해시면 hashchange 가 안 뜨므로 직접 호출
+    return;
+  }
+  location.hash = hash;
+}
+
+let renderedHash = null;
+
+function applyRoute() {
+  const route = parseRoute();
+  if (route === null) return; // 인-페이지 앵커 — 화면 전환 없음
+
+  const hash = routeToHash(route);
+  if (hash === renderedHash) return; // 각주에서 뒤로 온 경우 등 불필요한 재렌더 방지
+  renderedHash = hash;
+
+  if (route.view === 'post') {
+    showPostDetail(route.id);
+  } else {
+    setFilter(route.filter);
+    renderPosts();
+    showListView(); // 글 상세를 보던 중이면 목록으로 되돌려야 필터 결과가 보인다
+  }
+}
+
+// currentFilter 상태와 버튼 active 클래스만 담당 (렌더링과 분리)
+function setFilter(filter) {
+  const buttons = [...document.querySelectorAll('.filter-btn')];
+  const known = buttons.some(b => b.dataset.filter === filter);
+  currentFilter = known ? filter : 'all';
+  buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === currentFilter));
+}
+
 // 글 렌더링
 function renderPosts() {
   const postsList = document.getElementById('posts-list');
@@ -190,7 +252,7 @@ function renderPosts() {
   
   document.querySelectorAll('.post-item').forEach(item => {
     const postId = item.dataset.postId;
-    item.addEventListener('click', () => showPostDetail(postId));
+    item.addEventListener('click', () => navigate({ view: 'post', id: postId }));
   });
 
   document.querySelectorAll('.post-item-excerpt').forEach(el => {
@@ -300,7 +362,7 @@ async function showPostDetail(postId) {
     contentEl.querySelectorAll('[data-series-post]').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        showPostDetail(link.dataset.seriesPost);
+        navigate({ view: 'post', id: link.dataset.seriesPost });
       });
     });
 
@@ -318,6 +380,7 @@ async function showPostDetail(postId) {
 
   } catch (err) {
     console.error('Failed to load post detail:', err);
+    renderedHash = null; // 실패한 라우트를 '렌더 완료'로 남겨두면 재시도가 막힌다
   }
 }
 
@@ -361,21 +424,25 @@ function showSocialTooltip(anchor, message) {
 }
 
 // 초기화
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelector('.back-btn').addEventListener('click', showListView);
+document.addEventListener('DOMContentLoaded', async () => {
+  // history.back() 을 쓰면 시리즈 목차로 글 A → 글 B 를 오간 뒤에
+  // '목록으로' 가 글 A 로 가버리므로, 목록 라우트를 새로 쌓는다
+  document.querySelector('.back-btn')
+    .addEventListener('click', () => navigate({ view: 'list', filter: currentFilter }));
   loadProfile();
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      renderPosts();
-      // 글 상세를 보던 중이면 목록으로 되돌려야 필터 결과가 보인다
-      showListView();
+      navigate({ view: 'list', filter: btn.dataset.filter });
     });
   });
-  
-  loadPosts();
+
+  window.addEventListener('hashchange', applyRoute);
+
+  // 새로고침/딥링크 복원 — 목록을 그리기 전에 필터부터 확정한다
+  const initial = parseRoute();
+  if (initial?.view === 'list') setFilter(initial.filter);
+  await loadPosts();
+  applyRoute();
 });
