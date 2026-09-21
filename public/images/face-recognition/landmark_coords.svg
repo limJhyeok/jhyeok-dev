@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 570" width="800" height="570" font-family="-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif">
+<rect width="800" height="570" fill="#ffffff"/>
+<rect x="110.0" y="50.0" width="440" height="440" fill="#fafafa" stroke="#d0d0d0" stroke-width="1"/>
+<line x1="172.9" y1="50.0" x2="172.9" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="112.9" x2="550.0" y2="112.9" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="235.7" y1="50.0" x2="235.7" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="175.7" x2="550.0" y2="175.7" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="298.6" y1="50.0" x2="298.6" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="238.6" x2="550.0" y2="238.6" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="361.4" y1="50.0" x2="361.4" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="301.4" x2="550.0" y2="301.4" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="424.3" y1="50.0" x2="424.3" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="364.3" x2="550.0" y2="364.3" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="487.1" y1="50.0" x2="487.1" y2="490.0" stroke="#e6e6e6" stroke-width="1"/>
+<line x1="110.0" y1="427.1" x2="550.0" y2="427.1" stroke="#e6e6e6" stroke-width="1"/>
+<text x="110.0" y="510.0" font-size="12" fill="#777" text-anchor="middle">0</text>
+<text x="100.0" y="54.0" font-size="12" fill="#777" text-anchor="end">0</text>
+<text x="172.9" y="510.0" font-size="12" fill="#777" text-anchor="middle">16</text>
+<text x="100.0" y="116.9" font-size="12" fill="#777" text-anchor="end">16</text>
+<text x="235.7" y="510.0" font-size="12" fill="#777" text-anchor="middle">32</text>
+<text x="100.0" y="179.7" font-size="12" fill="#777" text-anchor="end">32</text>
+<text x="298.6" y="510.0" font-size="12" fill="#777" text-anchor="middle">48</text>
+<text x="100.0" y="242.6" font-size="12" fill="#777" text-anchor="end">48</text>
+<text x="361.4" y="510.0" font-size="12" fill="#777" text-anchor="middle">64</text>
+<text x="100.0" y="305.4" font-size="12" fill="#777" text-anchor="end">64</text>
+<text x="424.3" y="510.0" font-size="12" fill="#777" text-anchor="middle">80</text>
+<text x="100.0" y="368.3" font-size="12" fill="#777" text-anchor="end">80</text>
+<text x="487.1" y="510.0" font-size="12" fill="#777" text-anchor="middle">96</text>
+<text x="100.0" y="431.1" font-size="12" fill="#777" text-anchor="end">96</text>
+<text x="550.0" y="510.0" font-size="12" fill="#777" text-anchor="middle">112</text>
+<text x="100.0" y="494.0" font-size="12" fill="#777" text-anchor="end">112</text>
+<text x="330.0" y="534.0" font-size="13" fill="#555" text-anchor="middle">x (px) →</text>
+<text x="34" y="270.0" font-size="13" fill="#555" text-anchor="middle" transform="rotate(-90 34 270.0)">← y (px)</text>
+<text x="110.0" y="36.0" font-size="12.5" fill="#888">(0, 0) 원점은 좌측 상단 · 112 × 112 px 캔버스</text>
+<line x1="260.4" y1="253.1" x2="244.4" y2="244.1" stroke="#b5b5b5" stroke-width="1"/>
+<circle cx="260.4" cy="253.1" r="7" fill="#1e88e5" stroke="#ffffff" stroke-width="2"/>
+<text x="244.4" y="249.1" font-size="14.5" fill="#222" text-anchor="end">왼쪽 눈</text>
+<text x="244.4" y="266.1" font-size="12.5" fill="#888" text-anchor="end">(38.3, 51.7)</text>
+<line x1="398.9" y1="252.3" x2="414.9" y2="243.3" stroke="#b5b5b5" stroke-width="1"/>
+<circle cx="398.9" cy="252.3" r="7" fill="#1e88e5" stroke="#ffffff" stroke-width="2"/>
+<text x="414.9" y="248.3" font-size="14.5" fill="#222" text-anchor="start">오른쪽 눈</text>
+<text x="414.9" y="265.3" font-size="12.5" fill="#888" text-anchor="start">(73.5, 51.5)</text>
+<line x1="330.1" y1="331.8" x2="346.1" y2="331.8" stroke="#b5b5b5" stroke-width="1"/>
+<circle cx="330.1" cy="331.8" r="7" fill="#1e88e5" stroke="#ffffff" stroke-width="2"/>
+<text x="346.1" y="336.8" font-size="14.5" fill="#222" text-anchor="start">코 끝</text>
+<text x="346.1" y="353.8" font-size="12.5" fill="#888" text-anchor="start">(56.0, 71.7)</text>
+<line x1="273.2" y1="412.9" x2="257.2" y2="423.9" stroke="#b5b5b5" stroke-width="1"/>
+<circle cx="273.2" cy="412.9" r="7" fill="#1e88e5" stroke="#ffffff" stroke-width="2"/>
+<text x="257.2" y="428.9" font-size="14.5" fill="#222" text-anchor="end">왼쪽 입꼬리</text>
+<text x="257.2" y="445.9" font-size="12.5" fill="#888" text-anchor="end">(41.5, 92.4)</text>
+<line x1="387.9" y1="412.2" x2="403.9" y2="423.2" stroke="#b5b5b5" stroke-width="1"/>
+<circle cx="387.9" cy="412.2" r="7" fill="#1e88e5" stroke="#ffffff" stroke-width="2"/>
+<text x="403.9" y="428.2" font-size="14.5" fill="#222" text-anchor="start">오른쪽 입꼬리</text>
+<text x="403.9" y="445.2" font-size="12.5" fill="#888" text-anchor="start">(70.7, 92.2)</text>
+</svg>
