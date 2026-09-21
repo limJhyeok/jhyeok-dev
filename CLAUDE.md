@@ -24,24 +24,67 @@ api/
 content/
   posts/            # blog post markdown files (YYYY-MM-DD-slug.md)
 public/
-  index.html        # single HTML shell — no routing, just two views
-  scripts/app.js    # all frontend logic (view switching, markdown, KaTeX)
+  index.html        # single HTML shell — two views + #pagination container
+  scripts/app.js    # all frontend logic (hash router, pagination, markdown, KaTeX)
   styles/main.css   # CSS variables + component styles
 ```
 
 ### Two-view SPA pattern
 
-There is no client-side router. The frontend toggles between two views:
+The frontend toggles between two views:
 - **List view**: `.posts-section` visible, `#post-detail` hidden
 - **Detail view**: `.posts-section.hidden`, `#post-detail.active`
 
-`showPostDetail(postId)` drives the transition.
+### Hash router
+
+Views are addressable so the browser back button works. Routes:
+
+```
+#/          list, page 1      #/2       list, page 2
+#/dev       category, page 1  #/ai/3    category, page 3
+#/post/<id> post detail
+```
+
+A numeric segment is a page number, anything else is a category — they never
+collide. Page 1 is omitted from the URL.
+
+Rules to keep intact when touching `app.js`:
+
+- **Clicks only set `location.hash`.** All rendering happens in `applyRoute()`,
+  driven by `hashchange`. Never call `showPostDetail()` / `renderPosts()`
+  directly from a click handler — the history entry would be skipped.
+- **Only `#/…` is a route.** Post bodies contain in-page anchors (`](#appendix)`).
+  `parseRoute()` returns `null` for those so the post stays open; treating them as
+  routes kicks the reader back to the list.
+- `applyRoute()` skips re-rendering when the route is unchanged (`renderedHash`),
+  so returning from an in-page anchor doesn't re-fetch the post.
+- Out-of-range pages are clamped to the last page and the URL is corrected with
+  `history.replaceState` — never `location.hash =`, which would add an entry.
+- `← 목록으로` navigates to the list route rather than `history.back()`: after
+  hopping between posts via the series TOC, `back()` lands on another post.
+
+### Pagination
+
+`PAGE_SIZE = 5`. `renderPagination()` draws nothing when everything fits on one
+page. Page numbers are listed in full up to 7 pages, then abbreviated to
+`1 … 4 5 6 … 10`.
+
+`.pagination` base rules must stay **above** the `@media (width <= 768px)` block
+in `main.css` — same specificity means the later rule wins, and putting them after
+silently kills the mobile overrides. The `#pagination` element must have no
+whitespace inside it in `index.html`, or `.pagination:empty` won't match.
 
 ### Post loading flow
 
 1. `loadPosts()` → `GET /api/posts` → `getAllPosts()` reads `content/posts/*.md`, parses frontmatter, returns metadata + excerpt
-2. Clicking a post → `showPostDetail(id)` → `GET /api/posts/:id` → `getPost(id)` returns `{ meta, content }` (already parsed)
+2. Clicking a post → `#/post/<id>` → `applyRoute()` → `showPostDetail(id)` → `GET /api/posts/:id` → `getPost(id)` returns `{ meta, content }` (already parsed)
 3. Frontend renders markdown via `marked.parse()`, then calls `renderMathInElement()` for KaTeX
+
+`marked` renderer overrides live at the top of `app.js` (`html-demo` code blocks,
+external links → `target="_blank"`). When overriding a renderer method that
+renders inline tokens, call the original with `originalFn.call(this, token)` —
+binding it to the local `renderer` instance loses the `this.parser` that
+`marked.use()` injects, and rendering throws.
 
 Both post routes set `Cache-Control` (`s-maxage` + `stale-while-revalidate`) so Vercel's edge serves repeat reads without invoking the function.
 
@@ -55,13 +98,13 @@ The blog is fully static-content driven — posts come from `content/posts/*.md`
 ---
 title: "글 제목"
 date: 2025-03-01
-category: dev        # used for nav filter (All/Project/Dev/Retro)
+category: dev        # used for nav filter (All/Project/Dev/AI/Retro)
 tags: ["tag1", "tag2"]
 summary: "Optional. If set, used as excerpt in list view instead of auto-generated."
 ---
 ```
 
-`category` value must match the `data-filter` attribute in `index.html` nav exactly (case-sensitive).
+`category` value must match the `data-filter` attribute in `index.html` nav exactly (case-sensitive) — a post whose category has no matching nav button only ever shows under All. The category also appears in the URL (`#/dev`); a URL naming an unknown category falls back to the full list instead of rendering an empty page.
 
 ### Security decisions made
 
