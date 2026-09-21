@@ -68,13 +68,6 @@ body {
   color: var(--accent-color);
 }
 
-.tagline {
-  font-size: 0.875rem;
-  color: var(--secondary-color);
-  margin-top: 0.25rem;
-  font-weight: 400;
-}
-
 .nav-menu {
   display: flex;
   list-style: none;
@@ -645,15 +638,57 @@ a.series-toc-title:hover {
 }
 
 @media (width <= 768px) {
-  .navbar .container {
-    flex-direction: column;
-    gap: 1.5rem;
-    align-items: flex-start;
+  /* 모바일 헤더는 한 줄 — 이름 · 필터 · 소셜 아이콘 */
+  .navbar {
+    padding: 0.7rem 0;
   }
 
+  .navbar .container {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .nav-brand,
+  .nav-social {
+    flex: 0 0 auto;
+  }
+
+  .nav-brand h1 {
+    font-size: 1rem;
+  }
+
+  /* 필터는 개수가 늘어도 줄바꿈 없이 가로로 스크롤된다. 스크롤바는 숨기고,
+     양 끝 페이드(local 레이어가 덮개, scroll 레이어가 그림자)로 더 있음을 알린다 */
   .nav-menu {
-    gap: 1rem;
-    font-size: 0.9rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.85rem;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    background:
+      linear-gradient(to right, var(--light-bg), transparent) left / 18px 100%
+        no-repeat local,
+      linear-gradient(to left, var(--light-bg), transparent) right / 18px 100%
+        no-repeat local,
+      linear-gradient(to right, rgb(0 0 0 / 14%), transparent) left / 18px 100%
+        no-repeat scroll,
+      linear-gradient(to left, rgb(0 0 0 / 14%), transparent) right / 18px 100%
+        no-repeat scroll;
+  }
+
+  .nav-menu::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-menu li {
+    flex: 0 0 auto;
+  }
+
+  .nav-social {
+    gap: 0.5rem;
   }
 
   .post-item-header {

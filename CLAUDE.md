@@ -74,6 +74,20 @@ in `main.css` — same specificity means the later rule wins, and putting them a
 silently kills the mobile overrides. The `#pagination` element must have no
 whitespace inside it in `index.html`, or `.pagination:empty` won't match.
 
+### Mobile header
+
+Under `@media (width <= 768px)` the header is a single row — brand · filters ·
+social icons — at ~50px, so a post body isn't pushed off a phone screen by the
+sticky header. The filter list (`.nav-menu`) doesn't wrap: it scrolls
+horizontally, so adding a category never adds a second row. Keep
+`min-width: 0` + `flex: 1 1 auto` on `.nav-menu` and `flex: 0 0 auto` on its
+`li` — without them the flex row squeezes the items instead of scrolling.
+
+The fade at both ends is the `background-attachment: local/scroll` trick: the
+`local` layers scroll with the content and uncover the `scroll` shadow layers
+only while there is more to scroll. They use `var(--light-bg)`, so a background
+change needs those gradients updated too.
+
 ### Post loading flow
 
 1. `loadPosts()` → `GET /api/posts` → `getAllPosts()` reads `content/posts/*.md`, parses frontmatter, returns metadata + excerpt
