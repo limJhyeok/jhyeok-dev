@@ -372,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       currentFilter = btn.dataset.filter;
       renderPosts();
+      // 글 상세를 보던 중이면 목록으로 되돌려야 필터 결과가 보인다
+      showListView();
     });
   });
   
