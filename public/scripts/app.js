@@ -36,6 +36,16 @@ renderer.code = function ({ text, lang }) {
   return originalCode({ text, lang });
 };
 
+// bind 를 쓰면 marked 가 주입하는 this.parser 를 잃어버려서 link 렌더링이 깨진다.
+const originalLink = renderer.link;
+renderer.link = function (token) {
+  const html = originalLink.call(this, token);
+  // 외부 링크는 새 탭으로. 각주/목차용 #앵커는 현재 탭에서 이동해야 하므로 제외
+  return /^https?:\/\//i.test(token.href || '')
+    ? html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ')
+    : html;
+};
+
 marked.use({ renderer });
 
 // marked 는 수식 안의 `_` 두 개를 강조(<em>)로 해석해버려서
