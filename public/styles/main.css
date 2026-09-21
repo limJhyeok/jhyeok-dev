@@ -590,6 +590,60 @@ a.series-toc-title:hover {
 }
 
 /* Responsive Design */
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 3rem 0 1rem;
+}
+
+.pagination:empty {
+  display: none;
+}
+
+.page-btn {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--secondary-color);
+  cursor: pointer;
+  transition:
+    color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.page-btn:hover {
+  color: var(--accent-color);
+  border-color: var(--light-border);
+}
+
+.page-btn.active {
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  font-weight: 600;
+}
+
+.page-btn.disabled {
+  color: var(--light-border);
+  cursor: default;
+}
+
+.page-ellipsis {
+  color: var(--secondary-color);
+  padding: 0 0.15rem;
+}
+
 @media (width <= 768px) {
   .navbar .container {
     flex-direction: column;
@@ -633,6 +687,18 @@ a.series-toc-title:hover {
 
   .series-toc-item {
     font-size: 0.88rem;
+  }
+
+  .pagination {
+    gap: 0.2rem;
+    margin: 2rem 0 0.5rem;
+  }
+
+  .page-btn {
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.35rem;
+    font-size: 0.85rem;
   }
 }
 

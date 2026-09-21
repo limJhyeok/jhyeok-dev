@@ -1,6 +1,8 @@
 // 글 데이터 저장소
 let posts = [];
 let currentFilter = 'all';
+let currentPage = 1;
+const PAGE_SIZE = 5;
 const API_BASE = '/api';
 
 // 마크다운 설정
@@ -136,28 +138,36 @@ async function loadPosts() {
 
 
 // ---- 해시 라우팅 ----
-// #/            전체 목록
-// #/dev         카테고리 목록
+// #/            전체 목록 1페이지      #/2       전체 목록 2페이지
+// #/dev         카테고리 목록 1페이지   #/ai/3    카테고리 목록 3페이지
 // #/post/<id>   글 상세
 // 그 외(본문 각주의 #appendix 같은 인-페이지 앵커)는 라우트가 아니므로 건드리지 않는다.
 const POST_ROUTE_PREFIX = 'post/';
 
 function parseRoute() {
   const hash = location.hash;
-  if (hash === '' || hash === '#') return { view: 'list', filter: 'all' };
+  if (hash === '' || hash === '#') return { view: 'list', filter: 'all', page: 1 };
   if (!hash.startsWith('#/')) return null;
 
   const raw = decodeURIComponent(hash.slice(2));
   if (raw.startsWith(POST_ROUTE_PREFIX)) {
     return { view: 'post', id: raw.slice(POST_ROUTE_PREFIX.length) };
   }
-  return { view: 'list', filter: raw || 'all' };
+
+  // 숫자만인 세그먼트는 페이지 번호, 아니면 카테고리 (카테고리명과 겹치지 않는다)
+  const [first = '', second = ''] = raw.split('/');
+  const isPageNum = seg => /^\d+$/.test(seg);
+  const filter = isPageNum(first) ? 'all' : first || 'all';
+  const pageSeg = isPageNum(first) ? first : second;
+  return { view: 'list', filter, page: isPageNum(pageSeg) ? Number(pageSeg) : 1 };
 }
 
 function routeToHash(route) {
-  return route.view === 'post'
-    ? `#/${POST_ROUTE_PREFIX}${encodeURIComponent(route.id)}`
-    : route.filter === 'all' ? '#/' : `#/${encodeURIComponent(route.filter)}`;
+  if (route.view === 'post') return `#/${POST_ROUTE_PREFIX}${encodeURIComponent(route.id)}`;
+
+  const filter = route.filter === 'all' ? '' : encodeURIComponent(route.filter);
+  const page = (route.page ?? 1) > 1 ? String(route.page) : '';
+  return `#/${[filter, page].filter(Boolean).join('/')}`;
 }
 
 // 클릭은 해시만 바꾸고, 실제 렌더링은 applyRoute 한 곳에서만 한다
@@ -176,17 +186,37 @@ function applyRoute() {
   const route = parseRoute();
   if (route === null) return; // 인-페이지 앵커 — 화면 전환 없음
 
+  if (route.view === 'list') {
+    setFilter(route.filter);
+    // 범위 밖 페이지(#/dev/9 같은 링크)는 마지막 페이지로 보정한다
+    currentPage = Math.min(Math.max(1, route.page), totalPages());
+    route.page = currentPage;
+  }
+
   const hash = routeToHash(route);
+  // 보정된 주소를 히스토리에 새로 쌓지 않고 조용히 정정 (hashchange 도 안 뜬다).
+  // 단, 해시 없는 첫 화면(/)까지 /#/ 로 바꾸지는 않는다.
+  const atDefaultRoute = hash === '#/' && (location.hash === '' || location.hash === '#');
+  if (hash !== location.hash && !atDefaultRoute) {
+    history.replaceState(null, '', hash);
+  }
   if (hash === renderedHash) return; // 각주에서 뒤로 온 경우 등 불필요한 재렌더 방지
   renderedHash = hash;
 
   if (route.view === 'post') {
     showPostDetail(route.id);
   } else {
-    setFilter(route.filter);
     renderPosts();
     showListView(); // 글 상세를 보던 중이면 목록으로 되돌려야 필터 결과가 보인다
   }
+}
+
+function filteredPosts() {
+  return currentFilter === 'all' ? posts : posts.filter(post => post.category === currentFilter);
+}
+
+function totalPages() {
+  return Math.max(1, Math.ceil(filteredPosts().length / PAGE_SIZE));
 }
 
 // currentFilter 상태와 버튼 active 클래스만 담당 (렌더링과 분리)
@@ -197,17 +227,59 @@ function setFilter(filter) {
   buttons.forEach(b => b.classList.toggle('active', b.dataset.filter === currentFilter));
 }
 
+// 7페이지까지는 번호를 전부, 그 이상은 1 … 4 5 6 … 10 형태로 축약
+const ELLIPSIS = '…';
+
+function pageWindow(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages = new Set([1, total, current - 1, current, current + 1]);
+  // 현재 페이지가 양 끝에 붙어 있을 때도 보이는 번호 개수를 유지한다
+  if (current <= 3) [2, 3, 4].forEach(n => pages.add(n));
+  if (current >= total - 2) [total - 3, total - 2, total - 1].forEach(n => pages.add(n));
+
+  const sorted = [...pages].filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
+  return sorted.flatMap((n, i) => (i > 0 && n - sorted[i - 1] > 1 ? [ELLIPSIS, n] : [n]));
+}
+
+// 한 페이지에 다 들어가면(글 5개 이하) 페이지 UI 자체를 그리지 않는다
+function renderPagination(total) {
+  const nav = document.getElementById('pagination');
+  const pages = Math.ceil(total / PAGE_SIZE);
+  if (pages <= 1) {
+    nav.innerHTML = '';
+    return;
+  }
+
+  const btn = (label, page, { disabled = false, active = false } = {}) =>
+    disabled
+      ? `<span class="page-btn disabled" aria-hidden="true">${label}</span>`
+      : `<button class="page-btn${active ? ' active' : ''}" data-page="${page}"` +
+        `${active ? ' aria-current="page"' : ''}>${label}</button>`;
+
+  nav.innerHTML =
+    btn('←', currentPage - 1, { disabled: currentPage === 1 }) +
+    pageWindow(currentPage, pages)
+      .map(n => (n === ELLIPSIS
+        ? '<span class="page-ellipsis">…</span>'
+        : btn(n, n, { active: n === currentPage })))
+      .join('') +
+    btn('→', currentPage + 1, { disabled: currentPage === pages });
+
+  nav.querySelectorAll('.page-btn[data-page]').forEach(el => {
+    el.addEventListener('click', () =>
+      navigate({ view: 'list', filter: currentFilter, page: Number(el.dataset.page) }));
+  });
+}
+
 // 글 렌더링
 function renderPosts() {
   const postsList = document.getElementById('posts-list');
-  
-  let filtered = posts;
-  if (currentFilter !== 'all') {
-    filtered = posts.filter(post => post.category === currentFilter);
-  }
-  
+  const filtered = filteredPosts();
+
   if (filtered.length === 0) {
     postsList.innerHTML = '<div class="empty-state"><p>글이 없습니다.</p></div>';
+    renderPagination(0);
     return;
   }
   
@@ -226,7 +298,8 @@ function renderPosts() {
     return acc;
   }, {});
   
-  postsList.innerHTML = filtered.map(post => `
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  postsList.innerHTML = filtered.slice(pageStart, pageStart + PAGE_SIZE).map(post => `
     <div class="post-item" data-post-id="${post.id}">
       ${post.series ? `
         <div class="post-item-series">
@@ -249,7 +322,9 @@ function renderPosts() {
       ` : ''}
     </div>
   `).join('');
-  
+
+  renderPagination(filtered.length);
+
   document.querySelectorAll('.post-item').forEach(item => {
     const postId = item.dataset.postId;
     item.addEventListener('click', () => navigate({ view: 'post', id: postId }));
@@ -428,7 +503,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // history.back() 을 쓰면 시리즈 목차로 글 A → 글 B 를 오간 뒤에
   // '목록으로' 가 글 A 로 가버리므로, 목록 라우트를 새로 쌓는다
   document.querySelector('.back-btn')
-    .addEventListener('click', () => navigate({ view: 'list', filter: currentFilter }));
+    .addEventListener('click', () =>
+      navigate({ view: 'list', filter: currentFilter, page: currentPage }));
   loadProfile();
 
   document.querySelectorAll('.filter-btn').forEach(btn => {
