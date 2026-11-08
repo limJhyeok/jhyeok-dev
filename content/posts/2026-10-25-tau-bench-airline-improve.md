@@ -8,6 +8,18 @@ series: AI Agent 평가
 series_order: 3
 ---
 
+<a href="https://github.com/limJhyeok/tau2-bench-agents" target="_blank" style="text-decoration:none;">
+  <div style="
+      border:1px solid #e1e4e8;
+      border-radius:10px;
+      padding:16px;
+      transition:0.2s;
+  ">
+    <strong>🔗 tau2-bench-agents</strong> · GitHub 링크<br/>
+    τ²-bench airline 도메인에서 고객 상담 Agent를 직접 만들고, 평가 결과를 근거로 개선한 구현체입니다.
+  </div>
+</a>
+
 > 이 글은 [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) 저장소의 커밋 [`4ce7c03`](https://github.com/sierra-research/tau2-bench/tree/4ce7c03)을 기준으로 소스 코드를 분석했습니다.
 
 [이전 글](#/post/2026-10-22-tau-bench.md)에서는 τ-bench 논문을 정리했습니다. 이 글은 그 후속인 **τ²-bench**의 airline 도메인에서 직접 Agent를 돌려 보고, 평가 결과를 근거로 Agent를 개선한 과정을 다룹니다. 순서는 이렇습니다.
@@ -687,6 +699,7 @@ Train trace를 보고 규칙을 만들었으니, train에 과적합했다는 의
 ### 코드
 
 - [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench): 이 글이 분석한 커밋 [`4ce7c03`](https://github.com/sierra-research/tau2-bench/tree/4ce7c03)
+- [limJhyeok/tau2-bench-agents](https://github.com/limJhyeok/tau2-bench-agents): 이 글의 Agent 구현과 실험 코드 (baseline, react v4, cheatsheet·`rank_items` tool, pass^k·실패 분석 스크립트)
 
 ### Airline task 결함 (5.3)
 
