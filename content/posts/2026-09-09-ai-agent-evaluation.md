@@ -4,6 +4,8 @@ date: 2026-09-09
 category: ai
 summary: AI Agent 평가의 목적부터 데이터셋 기반 비교, LLM-as-a-Judge, simulation 기반 task 평가, tool 사용·trajectory·graph 단위의 세부 평가 방안과 평가 framework까지 정리합니다
 tags: ["AI Agent", "LLM", "Evaluation", "LLM-as-a-Judge", "Benchmark"]
+series: AI Agent 평가
+series_order: 1
 ---
 
 > 이 글은 **AI Agent 평가의 개념과 방법 지도(map)** 를 정리한 글입니다.
