@@ -116,7 +116,14 @@ change needs those gradients updated too.
 3. Frontend renders markdown via `marked.parse()`, then calls `renderMathInElement()` for KaTeX
 
 `marked` renderer overrides live at the top of `app.js` (`html-demo` code blocks,
-external links → `target="_blank"`). When overriding a renderer method that
+external links → `target="_blank"`) together with a `del` tokenizer override:
+only `~~text~~` is strikethrough, a lone `~` stays literal, so range notation
+like `5초~7초` needs no `\~` escaping. A literal dollar sign (prices) must be
+written `\$`: two bare `$` on one line are rendered as inline math.
+`parseMarkdownWithMath()` masks `\$` before `marked` (which would strip the
+backslash) and restores it as `<span class="literal-dollar">`, which both
+`renderMathInElement()` calls skip via `ignoredClasses`. This only applies to
+the post body — `summary` is inserted as-is, so a `\$` there shows the backslash. When overriding a renderer method that
 renders inline tokens, call the original with `originalFn.call(this, token)` —
 binding it to the local `renderer` instance loses the `this.parser` that
 `marked.use()` injects, and rendering throws.
