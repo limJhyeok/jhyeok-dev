@@ -49,13 +49,28 @@ renderer.link = function (token) {
     : html;
 };
 
-marked.use({ renderer });
+// GFM 은 `~text~` (물결표 하나) 도 취소선으로 만들어서 `5초~7초 … 7.5초~9.5초` 처럼
+// 범위 표기가 한 문단에 두 번 나오면 그 사이가 지워진다. `~~text~~` 만 취소선으로 인정하고
+// 단독 `~` 는 글자 그대로 둔다. false 를 반환하면 marked 기본 del 토크나이저로 넘어간다.
+marked.use({
+  renderer,
+  tokenizer: {
+    del(src) {
+      if (src.startsWith('~') && !src.startsWith('~~')) {
+        return { type: 'text', raw: '~', text: '~' };
+      }
+      return false;
+    },
+  },
+});
 
 // marked 는 수식 안의 `_` 두 개를 강조(<em>)로 해석해버려서
 // `\text{Intra}_{p05} - \text{Inter}_{p95}` 같은 식이 깨진다.
 // 파싱 전에 수식 구간을 플레이스홀더로 빼두고, 파싱 후 원문 그대로 복원한다.
 // 코드블록/인라인 코드 안의 `$` 는 수식이 아니므로 건드리지 않는다.
-const CODE_OR_MATH = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|(\$\$[\s\S]+?\$\$|\$(?![\s$])(?:[^$\n]*[^\s$])?\$)/g;
+// `\$` 는 수식이 아닌 달러 기호(금액 등). marked 는 `\` 를 지우고 KaTeX 는 `\$` 를
+// 이스케이프로 보지 않으므로, 따로 빼두었다가 KaTeX 가 무시하는 span 으로 복원한다.
+const CODE_OR_MATH = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|(\\\$)|(\$\$[\s\S]+?\$\$|\$(?![\s$])(?:[^$\n]*[^\s$])?\$)/g;
 
 function escapeMathHtml(text) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -63,12 +78,13 @@ function escapeMathHtml(text) {
 
 function parseMarkdownWithMath(markdown) {
   const math = [];
-  const masked = markdown.replace(CODE_OR_MATH, (matched, code, expr) =>
-    code ? matched : `@@MATH${math.push(expr) - 1}@@`
+  const masked = markdown.replace(CODE_OR_MATH, (matched, code, dollar, expr) =>
+    code ? matched : dollar ? '@@DOLLAR@@' : `@@MATH${math.push(expr) - 1}@@`
   );
   return marked
     .parse(masked)
-    .replace(/@@MATH(\d+)@@/g, (_, i) => escapeMathHtml(math[i]));
+    .replace(/@@MATH(\d+)@@/g, (_, i) => escapeMathHtml(math[i]))
+    .replace(/@@DOLLAR@@/g, '<span class="literal-dollar">$</span>');
 }
 
 const POSTS_CACHE_KEY = 'posts_cache_v2';
@@ -397,7 +413,8 @@ function renderPosts() {
       delimiters: [
         { left: '$$', right: '$$', display: true },
         { left: '$', right: '$', display: false },
-      ]
+      ],
+      ignoredClasses: ['literal-dollar'],
     });
   });
 }
@@ -553,7 +570,8 @@ async function showPostDetail(postId) {
       delimiters: [
         { left: '$$', right: '$$', display: true },
         { left: '$', right: '$', display: false }
-      ]
+      ],
+      ignoredClasses: ['literal-dollar'],
     });
 
     document.querySelector('.posts-section').classList.add('hidden');
