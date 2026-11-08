@@ -4,6 +4,8 @@ date: 2026-09-10
 category: ai
 summary: Smart CCTV의 오인식·미인식 원인을 '알고리즘'과 '입력 영상의 정보량'으로 분리하는 Probe Quality Evaluation을 정리합니다. Intra/Inter-Similarity를 쌍의 범위별로 나누는 법, 분리 격차와 LOO 식별로 판정하는 법, 품질 점수가 정말 식별 성패를 예측하는지 검증하는 법, 프레임 선별이 도달할 수 있는 성능 한계 측정 법까지 다룹니다.
 tags: ["Smart CCTV", "Face Recognition", "Evaluation", "Data Quality", "Computer Vision"]
+series: Smart CCTV
+series_order: 1
 ---
 
 > **TL;DR**
