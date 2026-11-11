@@ -10,15 +10,12 @@ series_order: 4
 
 ## Intro
 
-얼굴 인식 모델을 고른 뒤에 남는 결정의 대부분은 gallery DB와 API 설계에 있습니다. 어떤 값을 어떤 형태로 저장할지, 한 사람당 몇 장을 등록할지, 검색 결과를 어떤 기준으로 수락할지, 유출되면 무엇을 잃는지 등이 모두 여기서 정해집니다.
+얼굴 인식 모델을 고르고 나면, 남은 결정 대부분은 gallery DB와 API 설계에서 내려집니다. 어떤 값을 어떤 형태로 저장할지, 한 사람당 몇 장을 등록할지, 검색 결과를 어떤 기준으로 받아들일지, 유출되면 무엇을 잃는지가 모두 여기서 정해집니다.
 
-다루는 것
-- 이 글은 사전학습된 임베딩 모델(ArcFace 계열)을 그대로 쓰는 **1:N 식별 서비스**를 전제로 합니다. 
+- **다루는 것**: 사전학습된 임베딩 모델(ArcFace 계열)을 그대로 쓰는 **1:N 식별 서비스**의 저장 설계, 등록 절차, 판정 규칙, 보안·법적 절차, 운영
+- **다루지 않는 것**: 모델 학습 방법과 모델의 내부 구조
 
-다루지 않는 것
-- AI 모델 학습 방법, AI 모델의 내부 구조는 다루지 않습니다. 
-
-주의: 예제 코드는 이해를 돕기 위한 것이며 production 코드가 아닙니다.
+> 예제 코드는 흐름을 설명하기 위한 것이며 production 코드가 아닙니다.
 
 ### 용어
 
@@ -31,11 +28,11 @@ series_order: 4
 | FMR / FNMR | 1:1 비교에서 타인을 수락하는 비율 / 본인을 거절하는 비율 |
 | FPIR / FNIR | 1:N 검색에서 미등록자가 누군가로 식별되는 비율 / 등록자를 찾지 못하는 비율 |
 
-현업에서는 FAR/FRR이라는 말을 1:1과 1:N 구분 없이 씁니다. 둘은 다른 지표이고, 이 차이가 뒤의 threshold 설계에서 중요해집니다. 이 글에서는 구분이 필요한 곳에서만 FMR과 FPIR을 따로 씁니다.
+현업에서는 FAR/FRR이라는 말을 1:1과 1:N 구분 없이 씁니다. 하지만 1:1 비교의 오류율과 1:N 검색의 오류율은 다른 지표이고, 이 차이가 4장의 threshold 설계에서 중요해집니다. 이 글에서는 구분이 필요한 곳에서 FMR과 FPIR을 나눠 씁니다.
 
 ### 전체 흐름
 
-얼굴 등록(Face Enrollment)과 얼굴 식별(Face Recognition)은 같은 전처리와 같은 모델을 공유하고, 마지막 단계만 달라야합니다.
+얼굴 등록(enrollment)과 얼굴 식별(identification)은 전처리와 모델을 공유하고 마지막 단계만 다릅니다. 같은 파이프라인을 거쳐야 등록 벡터와 식별 벡터가 같은 공간에 놓여 비교할 수 있습니다.
 
 1. **캡처**: 클라이언트가 얼굴 프레임(이미지)을 보냅니다.
 2. **검출·정렬**: 이미지에서 얼굴과 landmark를 찾고 112×112로 정렬합니다.
@@ -48,71 +45,53 @@ series_order: 4
 
 ## 1. 무엇을 저장할 것인가
 
-Gallery에는 "어떤 모델이, 어떤 조건에서 뽑은, 누구의 벡터인가"에 관련한 데이터가 저장되어있어야 합니다. 
-간단히 해당 사람의 식별자(ID)와 임베딩 벡터만 저장하면 나중에 모델을 바꾸거나 오인식 원인을 추적할 때 되돌릴 방법이 없습니다.
+Gallery에는 "누구의 벡터인가"뿐 아니라 "어떤 모델이, 어떤 조건에서 뽑은 벡터인가"까지 남아 있어야 합니다.
+사람 식별자와 임베딩만 저장하면, 나중에 모델을 바꾸거나 오인식 원인을 추적할 때 되짚어 볼 근거가 없습니다.
 
 ### 모델 버전은 벡터와 같은 행에 둔다
 
-임베딩(Embedding)은 서로 다른 데이터와 아키텍처로 학습되는 순간 고유의 벡터 공간을 형성하기 때문에, 모델 간 직접적인 유사도 비교는 무의미해집니다. 심지어 동일한 데이터와 아키텍처로 학습하더라도, 학습 과정의 확률적(Probabilistic) 특성에 의해 가중치가 달라져 임베딩 벡터 공간의 정렬이 어긋나게 됩니다.
+임베딩 공간은 모델마다 다릅니다. 학습 데이터나 아키텍처가 다르면 당연히 다르고, 같은 데이터와 아키텍처로 다시 학습해도 초기화와 학습 과정의 무작위성 때문에 공간의 축이 어긋납니다. 서로 다른 모델이 뽑은 벡터끼리 구한 유사도는 의미가 없습니다.
 
-이로 인해 얼굴 등록은 `model-v1`으로 수행하고, 인증은 `model-v2`로 수행할 경우, 시스템 에러(Error) 없이 오인증/오류(Silent Failure)’가 발생할 수 있습니다.
+문제는 이것이 에러로 드러나지 않는다는 점입니다. `model-v1`으로 등록하고 `model-v2`로 식별해도 벡터 차원이 같으면 계산은 그대로 돌아갑니다. 엉뚱한 점수가 나와 조용히 오인식이나 본인 거절로 이어질 뿐입니다(silent failure).
 
-따라서 데이터베이스에 임베딩 벡터를 저장할 때 반드시 `model_name`과 `model_version` 메타데이터를 함께 기록하고, 검색 및 비교 쿼리 시 항상 해당 버전으로 필터링하도록 아키텍처를 설계해야 합니다.
+인식 모델만의 문제도 아닙니다. 얼굴 검출 모델(detector)이나 정렬(alignment) 방식이 바뀌어도 인식 모델에 들어가는 입력 분포가 달라져 점수가 흔들립니다. 그래서 버전은 인식 모델이 아니라 파이프라인 전체를 가리켜야 합니다.
 
-
-특히 얼굴 인식 시스템에서는 인식 모델(Recognition Model)뿐만 아니라 얼굴 검출 모델(Detector)과 정렬 방식(Alignment) 역시 버전 관리의 필수 요소입니다. 
-정렬 기준점이나 검출 영역이 조금만 달라져도 인식 모델에 입력되는 데이터 분포가 완전히 깨져 정상적인 유사도 비교가 불가능해지기 때문입니다.
-
-**아키텍처 설계 원칙**
-- 파이프라인 전체를 식별하는 메타데이터 관리
-    - 데이터베이스에 임베딩 벡터를 저장할 때, 인식 모델뿐만 아니라 검출기와 정렬 방식을 포함한 전체 파이프라인 구성을 문자열 형태로 함께 기록합니다.
-    - 예시 파이프라인 식별자: `arcface-r100 + scrfd-10g + align-v1`
-- 검색 및 비교 쿼리 필터링 강제
-    - 벡터 검색(Vector Search) 수행 시, 쿼리 생성에 사용된 파이프라인 메타데이터(`model_name`, `model_version` 등)와 일치하는 데이터만 대상으로 필터링을 강제합니다.
+- **파이프라인 전체를 하나의 버전 문자열로 기록합니다.** 예: `arcface-r100+scrfd-10g+align-v1`. 이 글의 스키마에서는 이 값을 `model_version` 컬럼 하나에 담습니다.
+- **검색은 항상 이 값으로 필터링합니다.** Probe를 만든 파이프라인과 `model_version`이 같은 템플릿만 비교 대상으로 삼습니다.
 
 ### L2 정규화한 값을 저장하고, norm은 따로 둔다
 
-ArcFace 계열 모델은 코사인 유사도(Cosine Similarity)를 지표로 삼아 학습되므로, 갤러리(Gallery)와 프로브(Probe) 간의 비교 역시 코사인 유사도를 기반으로 수행해야 합니다 \[1\]. 
+ArcFace 계열 모델은 각도(cosine) 기반 margin으로 학습되므로, gallery와 probe도 코사인 유사도로 비교합니다 [\[1\]](#ref-1).
 
-이때 임베딩 벡터를 미리 L2 정규화(Normalization)하여 저장하면, 벡터 간의 **내적(Dot Product)** 연산만으로 코사인 유사도를 바로 도출할 수 있습니다. 이를 통해 검색 로직과 벡터 인덱스 설정을 단순화할 수 있을 뿐만 아니라, 대규모 비교 연산 시 처리 속도를 크게 향상시킬 수 있습니다.
-```py
+임베딩을 L2 정규화해서 저장하면 코사인 유사도가 내적(dot product) 한 번으로 계산됩니다. 비교할 때마다 norm을 다시 구할 필요가 없고, 검색 코드와 벡터 인덱스 설정도 단순해집니다.
+
+```python
 import numpy as np
 
-def verify_face(probe_embedding: np.ndarray, gallery_id: str):
-  # 1. DB에서 L2 정규화가 완료된 갤러리 벡터들을 가져옴 (Pseudo code)
-  # Shape: (N, D)
-  gallery_vectors = fetch_gallery_vectors(gallery_id)
+def l2n(x: np.ndarray) -> np.ndarray:
+    return x / np.linalg.norm(x, axis=-1, keepdims=True)
 
-  # 2. Probe 벡터 L2 정규화 수행
-  probe_norm = np.linalg.norm(probe_embedding)
-  if probe_norm == 0:
-    raise ValueError("Probe vector norm is zero.")
+def to_template(raw: np.ndarray) -> tuple[np.ndarray, float]:
+    """모델 출력 → (L2 정규화 벡터, 정규화 전 norm). 등록과 식별 모두 이 함수를 거친다."""
+    norm = float(np.linalg.norm(raw))
+    if norm == 0:
+        raise ValueError("embedding norm is zero")
+    return (raw / norm).astype(np.float32), norm
 
-  normalized_probe = probe_embedding / probe_norm
-
-  # 3. 코사인 유사도 계산
-  # similarity = dot(A, B) / (||A|| * ||B||)
-  # 갤러리 벡터가 이미 L2 정규화되어 있으므로 
-  # probe_norm과의 단순 내적(Dot Product)이 곧 코사인 유사도가 됨
-  similarity_scores = np.dot(
-    gallery_vectors, 
-    normalized_probe
-  )  
-
-  # Shape: (N,)
-  return similarity_scores
+def similarities(probe: np.ndarray, gallery: np.ndarray) -> np.ndarray:
+    """probe: (D,), gallery: (N, D). 둘 다 정규화되어 있으므로 내적이 곧 코사인 유사도."""
+    return gallery @ probe   # (N,)
 ```
 
-정규화 이전의 원본(Raw) 벡터 크기(Norm)에는 얼굴 이미지의 품질과 관련된 유의미한 정보가 내포되어 있습니다 \[2\].
+다만 정규화하면 사라지는 정보가 있습니다. 정규화 전 벡터의 크기(norm)는 얼굴 이미지의 품질과 관련이 있습니다 [\[2\]](#ref-2).
+norm이 크면 모델이 그 이미지를 **선명하고 정면에 가까워 신원이 분명한** 이미지로 본다는 뜻이고, 작으면 **blur, 나쁜 조명, 큰 pose, 가림(occlusion)** 때문에 확신이 낮다는 뜻입니다.
+MagFace는 이 관계가 성립하도록 명시적으로 학습한 모델이고, 일반 ArcFace에서는 상관이 그보다 약하므로 참고 신호로 쓰는 것이 맞습니다.
 
-일반적으로 원본 벡터의 크기가 클수록 모델은 해당 이미지를 **선명도가 높고, 정면에 가까우며, 신원 식별이 명확한 고품질**로 판단하는 경향이 있습니다.
-반대로 벡터의 크기가 작다면 **블러(Blur), 불리한 조도, 극단적인 포즈(Pose), 오클루전(Occlusion)** 등으로 인해 모델이 인식하기에 불확실하고 품질이 낮은 이미지임을 뜻합니다.
+그래서 원본 벡터를 통째로 보관하지 않고, **정규화 벡터와 `raw_norm` 스칼라 하나**를 함께 저장합니다. 품질 신호는 남기면서 저장 형식과 비교 방식은 하나로 통일할 수 있습니다.
 
-따라서 원본 벡터 전체를 그대로 보관하는 대신, **L2 정규화 벡터와 원본 벡터의 크기를 담은 `raw_norm` 스칼라 값**을 분리하여 저장하는 방식을 권장합니다. 이를 통해 **이미지 품질에 대한 신호는 유실 없이 보존하면서도, 벡터 저장 및 유사도 비교 형식을 효율적으로 일원화**할 수 있습니다.
+### 메타데이터는 "나중에 판단에 쓸 것"만 남긴다
 
-### 세션 메타는 "나중에 판단에 쓸 것"만 남긴다
-
-메타데이터도 개인정보이므로 많이 남길수록 좋은 것이 아닙니다. 각 필드가 어떤 결정에 쓰이는지 답할 수 있는 것만 저장합니다.
+메타데이터도 개인정보이므로 많이 남길수록 좋은 것이 아닙니다. 필드마다 어떤 결정에 쓰이는지 답할 수 있을 때만 저장합니다.
 
 | 필드 | 쓰임 |
 | --- | --- |
@@ -126,7 +105,7 @@ def verify_face(probe_embedding: np.ndarray, gallery_id: str):
 
 ### 스키마
 
-벡터 컬럼은 pgvector 확장의 `vector(512)`를 기준으로 적었습니다 \[3\]. 확장을 쓰지 않거나 애플리케이션 레벨 암호화를 적용하면 `bytea`로 바꿉니다. `subject_ref`는 회원 ID가 아닌 가명 키이며, 이유는 6장에서 다룹니다.
+벡터 컬럼은 [pgvector](https://github.com/pgvector/pgvector) 확장의 `vector(512)`를 기준으로 적었습니다 [\[3\]](#ref-3). 확장을 쓰지 않거나 애플리케이션 레벨 암호화를 적용하면 `bytea`로 바꿉니다. `subject_ref`는 회원 ID가 아닌 가명 키이며, 이유는 6장에서 다룹니다.
 
 **`face_templates`**: gallery 본체
 
@@ -152,8 +131,9 @@ def verify_face(probe_embedding: np.ndarray, gallery_id: str):
 | --- | --- | --- |
 | `session_id` | `uuid` PK |  |
 | `subject_ref` | `uuid` NOT NULL |  |
-| `status` | `text` NOT NULL | `open` / `committed` / held / `aborted` / `expired` |
+| `status` | `text` NOT NULL | `open` / `committed` / `held` / `aborted` / `expired` |
 | `model_version` | `text` NOT NULL | 세션 시작 시점에 고정 |
+| `attempt_count` | `integer` NOT NULL DEFAULT 0 | 제출한 프레임 수. 3장의 시도 상한에 사용 |
 | `consent_id` | `uuid` FK NOT NULL | 동의 없이는 세션을 열 수 없음 |
 | `is_initial` | `boolean` NOT NULL |  |
 | `device_info` | `jsonb` | 기기 모델, 카메라 해상도 등 |
@@ -164,67 +144,66 @@ def verify_face(probe_embedding: np.ndarray, gallery_id: str):
 ## 2. 등록 전략: 정면 1장인가, 다각도 N-shot인가
 
 가장 단순한 등록은 정면 사진 1장입니다.
-Probe가 항상 정면으로 협조하는 환경(e.g., Apple Face ID)이라면 이것으로 충분할 수 있습니다.
-다각도 N-shot은 등록 UX와 저장·검색 비용을 늘리므로, 도입하려면 아래 두 질문에 답할 수 있어야 합니다.
+사용자가 항상 카메라를 정면으로 바라보며 협조하는 환경(예: Apple Face ID)이라면 이것으로 충분할 수 있습니다.
+다각도 N-shot은 등록 과정을 번거롭게 하고 저장·검색 비용도 늘리므로, 도입하기 전에 아래 두 질문에 답해야 합니다.
 
-### 질문 1. 정렬 모듈이 존재하는데 다각도 등록이 필요한지?
+### 질문 1. 정렬을 하는데도 다각도 등록이 필요한가
 
-정렬 모듈은 모든 얼굴을 정면으로 돌려 주지 않습니다.
-InsightFace류의 정렬은 landmark 5점을 기준 좌표에 맞추는 2D similarity transform입니다.
-이 변환으로 보정되는 것은 이미지 평면 안의 변화, 즉 평면 내 회전(roll), 크기, 위치입니다.
+정렬은 얼굴을 정면으로 돌려 주지 않습니다.
+[InsightFace](https://github.com/deepinsight/insightface) 계열의 정렬은 landmark 5점을 기준 좌표에 맞추는 2D similarity transform입니다.
+이 변환이 보정하는 것은 이미지 평면 안의 변화, 즉 평면 내 회전(roll), 크기, 위치뿐입니다.
 고개를 좌우(yaw)나 상하(pitch)로 돌린 것은 이미지 평면 밖의 회전이라 그대로 남습니다.
 옆얼굴은 정렬 후에도 옆얼굴이고, 가려진 반쪽은 복원되지 않습니다.
 
 <figure style="margin:1.5rem 0;"><a href="/images/face-enrollment/align.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/face-enrollment/align.png" alt="5점 정렬 전후를 비교한 두 패널. 왼쪽 (a)는 기울어진 얼굴, 작게 찍힌 얼굴, 프레임 한쪽에 치우친 얼굴이 정렬 후 모두 같은 112×112 정면 얼굴이 되고 랜드마크 5점이 기준점과 겹친다. 오른쪽 (b)는 옆으로 돌린 얼굴과 위에서 내려다본 얼굴로, 정렬 후에도 옆얼굴과 눌린 얼굴이 남고 랜드마크가 기준점과 어긋난다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.6;"><strong>5점 정렬(2D similarity transform)이 보정하는 변화와 보정하지 못하는 변화.</strong> (a) 위에서부터 roll, scale, translation. 모두 이미지 평면 안의 변화라 정렬 후 같은 정면 얼굴이 되고, 검출된 랜드마크 5점(●)이 기준점(+)과 일치합니다. (b) 위는 yaw 60°, 아래는 pitch 35°. 평면 밖의 회전이라 정렬은 랜드마크 5점을 기준점에 최대한 가깝게 맞출 뿐 일치시키지 못합니다. Yaw는 옆얼굴이 그대로 남고, pitch는 눈–입 세로 간격이 눌린 채 남습니다. 회전과 균일한 크기 조정만으로는 세로 방향만 늘릴 수 없기 때문입니다. 3D 모델: MakeHuman base mesh (CC0).</figcaption></figure>
 
-모델 자체도 pose에 완전히 강건하지는 않습니다.
-ArcFace류의 학습 데이터는 웹에서 수집한 in-the-wild 이미지라 여러 각도가 섞여 있지만, 대부분 정면에 치우쳐 있습니다 \[24\].
+모델도 pose에 완전히 강건하지 않습니다.
+ArcFace 계열의 학습 데이터는 웹에서 모은 in-the-wild 이미지라 여러 각도가 섞여 있지만, 대부분 정면 쪽에 몰려 있습니다 [\[24\]](#ref-24).
 
-- CFP 데이터셋 논문은 당시 알고리즘들의 정확도가 정면-정면 대비 정면-측면에서 10%p 이상 떨어진다고 보고했습니다 \[4\].
-- ArcFace 논문에서도 같은 모델이 LFW에서는 99.83%, pose 차이를 강조한 CPLFW에서는 92.08%를 기록했습니다 \[1\].
-- Baltanas et al.은 yaw ±65°, pitch ±35° 범위를 고르게 담은 데이터셋으로 정면 1장 등록을 평가했습니다. 세 모델 모두 각도가 커질수록 본인 간 거리가 벌어졌고, ArcFace는 가장 큰 각도 구간에서 평균 거리가 threshold를 넘었습니다. 주요 벤치마크 점수가 가장 좋은 모델이 pose 강건성은 가장 낮았다는 점도 눈여겨볼 만합니다 \[24\].
+- CFP 데이터셋 논문은 당시 알고리즘들의 정확도가 정면-정면 대비 정면-측면에서 10%p 이상 떨어진다고 보고했습니다 [\[4\]](#ref-4).
+- ArcFace 논문에서도 같은 모델이 LFW에서는 99.83%, pose 차이를 강조한 CPLFW에서는 92.08%를 기록했습니다 [\[1\]](#ref-1).
+- Baltanas et al.은 yaw ±65°, pitch ±35° 범위를 고르게 담은 데이터셋으로 정면 1장 등록을 평가했습니다. 비교한 세 모델(FaceNet, ArcFace, CosFace) 모두 각도가 커질수록 본인끼리의 거리가 벌어졌고, ArcFace는 가장 큰 각도 구간에서 평균 거리가 threshold를 넘었습니다. 주요 벤치마크 점수가 가장 좋은 모델의 pose 강건성이 가장 낮았다는 점도 눈여겨볼 만합니다 [\[24\]](#ref-24).
 
-즉 gallery와 probe의 각도 차이가 클수록 본인 간 유사도가 내려가고, 같은 threshold에서 본인 거절이 늘어납니다.
+정리하면, gallery와 probe의 각도 차이가 클수록 본인끼리의 유사도가 내려가고 같은 threshold에서 본인 거절이 늘어납니다.
 다각도 등록은 모델을 바꾸지 않고 이 각도 차이를 줄이는 방법입니다.
-Probe가 어떤 각도로 들어와도 가까운 각도의 템플릿이 gallery에 하나는 있게 됩니다.
+Probe가 어느 각도로 들어와도 gallery에 가까운 각도의 템플릿이 하나는 있게 됩니다.
 
-같은 연구에서 gallery를 1인당 1개 각도에서, 최적화로 고른 5개 각도로 늘리자 ArcFace의 식별 정확도가 0.73에서 약 0.95로 올랐습니다 \[24\].
-다만 21명 규모의 데이터셋에서 각도 선택과 평가를 함께 한 결과라, 수치보다는 경향으로 읽는 것이 맞습니다.
-같은 실험에서 확인된 경향은 세 가지입니다.
+같은 연구에서 gallery를 1인당 1개 각도에서 최적화로 고른 5개 각도로 늘리자, ArcFace의 식별 정확도가 0.73에서 약 0.95로 올랐습니다 [\[24\]](#ref-24).
+다만 21명 규모의 데이터셋에서 각도 선택과 평가를 함께 한 결과이므로, 수치보다는 경향으로 읽어야 합니다.
+이 실험에서 읽을 수 있는 경향은 세 가지입니다.
 
-- **개선 폭은 체감합니다.** 처음 몇 장을 더할 때 효과가 가장 크고, 이후로는 장수를 늘려도 이득이 적습니다.
-- **어떤 각도를 넣느냐가 중요합니다.** 인접한 각도는 정보가 겹치므로, 장수보다 각도의 분산이 효과를 좌우합니다.
-- **타인과의 거리도 함께 줄어듭니다.** 1인당 템플릿이 늘면 타인 템플릿과 우연히 가까워질 기회도 늘어, 오인식 위험이 커집니다. 이 실험에서는 threshold와 거리가 충분히 멀었지만, 대규모 gallery에서는 FAR을 다시 측정해야 합니다.
+- **개선 폭은 갈수록 줄어듭니다.** 처음 몇 장을 더할 때 효과가 가장 크고, 그 뒤로는 장수를 늘려도 이득이 작습니다.
+- **어떤 각도를 넣느냐가 중요합니다.** 인접한 각도는 정보가 겹치므로, 장수보다 각도가 얼마나 고르게 퍼져 있는지가 효과를 좌우합니다.
+- **타인과도 가까워집니다.** 1인당 템플릿이 늘면 타인의 템플릿과 우연히 가까워질 기회도 늘어 오인식 위험이 커집니다. 이 실험에서는 타인과의 거리가 threshold보다 충분히 멀었지만, 대규모 gallery에서는 FPIR을 다시 측정해야 합니다.
 
-효과의 크기는 probe 환경에 달려 있습니다.
+효과의 크기는 probe가 들어오는 환경에 달려 있습니다.
 걸어 지나가는 사람을 CCTV로 잡는 환경에서는 차이가 크고, 키오스크 앞에 서서 정면을 보는 환경에서는 작습니다.
 
 ### 질문 2. 잘 찍힌 사진 1장이면 충분하지 않은가
 
-"잘 찍힌 1장"을 고를 수 있다는 가정이 약합니다. 여러 장이 필요한 이유는 세 가지입니다.
+"잘 찍힌 1장"을 고를 수 있다는 가정부터 약합니다. 여러 장이 필요한 이유는 세 가지입니다.
 
-- **한 장의 임베딩에는 잡음이 있습니다.** 표정, 조명, 미세한 blur, 검출 박스의 흔들림이 벡터를 조금씩 움직입니다. 여러 장을 쓰면 이 분산이 줄어듭니다. IJB 계열 벤치마크가 한 사람을 이미지 여러 장의 묶음(template)으로 평가하고 \[5\], 묶음을 하나로 합치는 방법이 별도 연구 주제인 이유입니다 \[6\].
+- **한 장의 임베딩에는 잡음이 있습니다.** 표정, 조명, 미세한 blur, 검출 박스의 흔들림이 벡터를 조금씩 움직입니다. 여러 장을 쓰면 이 분산이 줄어듭니다. IJB 계열 벤치마크가 한 사람을 이미지 여러 장의 묶음(template)으로 평가하고 [\[5\]](#ref-5), 묶음을 하나로 합치는 방법이 별도 연구 주제인 이유입니다 [\[6\]](#ref-6).
 - **품질 점수는 완벽하지 않습니다.** FIQA가 높게 평가한 이미지가 실제 매칭에서도 가장 좋다는 보장은 없습니다. 한 장에 전부를 걸면 그 한 장이 나쁠 때 대안이 없습니다.
 - **두 장 이상이어야 일관성 검사가 가능합니다.** 등록 중 다른 사람의 얼굴이 섞였는지는 프레임끼리 비교해야 알 수 있습니다.
 
-상용 사례로는 Apple Face ID가 있습니다. 
-등록 때 고개를 돌려 여러 각도를 캡처하게 하고, 이후 인증에 성공할 때마다 얼굴 데이터를 갱신합니다 \[7\].
+상용 사례로는 Apple Face ID가 있습니다.
+등록할 때 고개를 돌려 여러 각도를 캡처하게 하고, 이후 인증에 성공할 때마다 얼굴 데이터를 갱신합니다 [\[7\]](#ref-7).
 
 ### N장을 어떻게 쓸 것인가
 
 | 방식 | 저장 | 점수 계산 | 장점 | 주의점 |
 | --- | --- | --- | --- | --- |
-| 전부 저장 + max | 사람당 N개 Vector | 템플릿별 유사도의 최댓값 | 각도 대응이 가장 좋음 | 저장·검색 비용 N배, 타인 수락률 상승 |
-| 평균 centroid 1개 | 사람당 1개 Vector | centroid와의 유사도 | 저장·검색이 가장 가벼움 | 각도가 넓으면 평균이 어느 각도와도 멀어짐 |
+| 전부 저장 + max | 사람당 N행 | 템플릿별 유사도의 최댓값 | 각도 대응이 가장 좋음 | 저장·검색 비용 N배, 타인 수락률 상승 |
+| 평균 centroid 1개 | 사람당 1행 | centroid와의 유사도 | 저장·검색이 가장 가벼움 | 각도가 넓으면 평균이 어느 각도와도 멀어짐 |
 | pose bucket별 centroid | 사람당 3\~5행 | bucket centroid 중 최댓값 | 잡음 감소와 각도 대응의 절충 | bucket 경계와 개수를 정해야 함 |
 
-**max 방식에서 놓치기 쉬운 점**: 사람당 템플릿이 늘면 타인 얼굴이 그중 하나와 우연히 높은 점수를 낼 기회도 늘어납니다. 템플릿 수를 바꾸면 threshold를 다시 셋팅해야 합니다.
+**max 방식에서 놓치기 쉬운 점**: 사람당 템플릿이 늘면 타인 얼굴이 그중 하나와 우연히 높은 점수를 낼 기회도 늘어납니다. 템플릿 수를 바꾸면 threshold도 다시 정해야 합니다.
 
 ```python
 import numpy as np
 
-def l2n(x: np.ndarray) -> np.ndarray:
-    return x / np.linalg.norm(x, axis=-1, keepdims=True)
+# l2n은 1장의 함수
 
 def score_max(probe: np.ndarray, templates: np.ndarray) -> float:
     """templates: (K, 512), 모두 L2 정규화. 가장 가까운 템플릿의 유사도."""
@@ -244,18 +223,18 @@ def bucket_centroids(templates: np.ndarray, buckets: list[str]) -> dict[str, np.
 
 ### 근거는 자기 데이터로 다시 확인한다
 
-위 문헌은 방향을 알려 줄 뿐, 우리 카메라와 우리 회원에게 얼마나 효과가 있는지는 알려 주지 않습니다. 같은 probe 집합에 대해 gallery 구성만 바꿔 비교합니다.
+위 문헌은 방향만 알려 줍니다. 우리 카메라와 우리 사용자에게 효과가 얼마나 되는지는, 같은 probe 집합에서 gallery 구성만 바꿔 비교해 봐야 알 수 있습니다.
 
-1. 동일 인원에 대해 gallery를 세 가지로 만듭니다: 정면 1장, 정면 N장, 다각도 N장.
-2. 미등록자 probe로 오식별률이 같아지도록 구성별 threshold를 맞춥니다.
-3. 그 threshold에서 등록자 probe의 미식별률을 비교합니다.
+1. 같은 인원으로 gallery를 세 가지 만듭니다: 정면 1장, 정면 N장, 다각도 N장.
+2. 미등록자 probe의 오식별률(FPIR)이 같아지도록 구성별 threshold를 맞춥니다.
+3. 그 threshold에서 등록자 probe의 미식별률(FNIR)을 비교합니다.
 
-threshold를 고정한 채 비교하면 템플릿 수가 많은 쪽이 유리하게 보이므로 2번 단계를 빼면 안 됩니다. 
-시작점으로는 정면·좌·우·상·하 5개 bucket에 bucket당 1\~3장을 제안하지만, 이 숫자는 검증 대상이지 정답이 아닙니다.
+threshold를 고정한 채 비교하면 템플릿이 많은 쪽이 유리해 보이므로 2번 단계를 빼면 안 됩니다.
+시작점으로는 정면·좌·우·상·하 5개 bucket에 bucket당 1\~3장을 제안하지만, 이 숫자도 검증할 대상이지 정답이 아닙니다.
 
 ## 3. 등록 프로토콜: staging 후 commit
 
-다각도 N-shot 등록은 요청 여러 번에 걸쳐 진행되므로, 중간 상태가 gallery에 저장되지 않아야 합니다.
+다각도 N-shot 등록은 여러 번의 요청에 걸쳐 진행되므로, 중간 상태가 gallery에 들어가면 안 됩니다.
 등록 중인 프레임은 staging에 쌓고, 조건을 모두 만족했을 때 한 트랜잭션으로 gallery에 옮깁니다.
 
 ### 절차
@@ -269,18 +248,18 @@ threshold를 고정한 채 비교하면 템플릿 수가 많은 쪽이 유리하
 
 | 검사 | 거절 사유 | 막으려는 것 |
 | --- | --- | --- |
-| 캡쳐된 이미지에 얼굴이 정확히 하나 | `face_count` | 뒤에 선 사람이 함께 등록되는 것 |
+| 프레임에 얼굴이 정확히 하나 | `face_count` | 뒤에 선 사람이 함께 등록되는 것 |
 | liveness | `liveness` | 사진·영상으로 타인을 등록하는 것 |
 | 품질(FIQA) | `quality` | blur, 가림, 역광 이미지가 템플릿이 되는 것 |
 | 세션 내 일관성 | `identity_mismatch` | 중간에 다른 사람으로 바뀌어 얼굴이 섞이는 것 |
 | 근접 중복 | `near_duplicate` | 거의 같은 프레임 N장으로 각도 조건을 채우는 것 |
 
-품질 검사는 임베딩 전에 합니다.
-저품질 이미지의 임베딩은 위치가 불안정해 gallery 전체의 오식별을 늘립니다.
-FIQA 방법으로는 SER-FIQ \[8\], MagFace의 norm \[2\] 등이 있고,
-이미지 프로세싱 기법으로 두 눈 사이의 거리, blurness, 조도 등을 측정하는 방안이 있습니다.
+품질이 낮은 프레임은 템플릿이 되기 전에 걸러 냅니다.
+저품질 이미지의 임베딩은 위치가 불안정해서, gallery에 들어가면 다른 사람의 probe와도 우연히 가까워지기 쉽습니다.
+FIQA 방법으로는 SER-FIQ [\[8\]](#ref-8)나 MagFace의 norm [\[2\]](#ref-2) 같은 모델 기반 방법이 있고,
+두 눈 사이 거리, 흐림 정도, 밝기를 재는 영상 처리 기반 방법도 있습니다.
 
-일관성 threshold는 식별용 threshold보다 낮게 잡습니다.
+일관성 검사의 threshold는 식별용 threshold보다 낮게 잡습니다.
 정면과 측면처럼 각도가 다른 본인 프레임끼리는 유사도가 내려가기 때문입니다.
 근접 중복은 클라이언트의 캡처 간격으로 먼저 줄이고, 서버가 같은 bucket 안에서 한 번 더 걸러 냅니다.
 
@@ -309,7 +288,7 @@ FIQA 방법으로는 SER-FIQ \[8\], MagFace의 norm \[2\] 등이 있고,
 
 ### 예시 코드
 
-아래 코드는 흐름을 보여 주기 위한 것입니다. `detect_and_align`, `liveness_score`, `quality_score`, `embed`, `get_session`, `db`는 설명용 stub이며, threshold 값은 임의의 예시입니다. `to_template`과 `centroid`는 앞 장의 함수입니다.
+아래 코드는 흐름을 보여 주기 위한 것입니다. `DSN`, `decode_image`, `detect_and_align`, `liveness_score`, `quality_score`, `embed`, `get_session`은 설명용 stub이고, threshold 값은 임의의 예시입니다. `to_template`은 1장, `centroid`는 2장의 함수입니다.
 
 ```python
 from contextlib import asynccontextmanager
@@ -459,15 +438,14 @@ async def commit(session_id: UUID):
         if not REQUIRED <= {r["pose_bucket"] for r in staged}:
             raise HTTPException(422, "pose coverage incomplete")
 
-        # gallery에 이미 같은 얼굴이 다른 사람으로 등록되어 있는지 확인.
-        # HNSW는 WHERE를 인덱스 탐색 뒤에 적용하므로, 조건에 맞는 행이 모자라면
-        # 탐색을 이어가도록 한다 (pgvector 0.8+).
+        # gallery에 같은 얼굴이 다른 사람으로 이미 등록되어 있는지 확인한다.
+        # HNSW 인덱스가 있으면 WHERE가 인덱스 탐색 뒤에 적용되므로, 조건에 맞는
+        # 행이 모자랄 때 탐색을 이어가게 한다(pgvector 0.8+). 인덱스가 없으면
+        # 이 설정은 영향이 없고 exact search로 동작한다.
         #
-        # pgvector 없이 PostgreSQL만 쓴다면: 
-        # 같은 조건의 템플릿을 커서로 배치 단위로 읽어
-        # 애플리케이션에서 내적을 계산하고 최댓값만 유지한다 (전수 비교).
-        # 등록 빈도가 낮으니 템플릿 수만 개까지는 충분하고, 그 이상이면
-        # model_version별 gallery 행렬을 메모리에 캐시하거나 벡터 인덱스 사용.
+        # pgvector 없이 PostgreSQL만 쓴다면: 같은 조건의 템플릿을 커서로 배치 단위로
+        # 읽어 애플리케이션에서 내적의 최댓값을 구한다(전수 비교). 등록은 드물어서
+        # 템플릿 수만 개까지는 이것으로 충분하다.
         await conn.execute("SET LOCAL hnsw.iterative_scan = strict_order")
         c = centroid(np.stack([r["embedding"] for r in staged]))
         hit = await conn.fetchrow(
@@ -514,29 +492,31 @@ async def commit(session_id: UUID):
     return {"status": "committed"}
 ```
 
-`<=>`는 pgvector의 cosine distance 연산자입니다 \[3\].
+`<=>`는 pgvector의 cosine distance 연산자입니다 [\[3\]](#ref-3).
 
-### 중복과 유사인 처리
+### 중복과 닮은 사람 처리
 
-commit 시점의 gallery 검색 결과는 세 구간으로 나눕니다.
+commit 시점의 gallery 검색 결과는 세 구간으로 나눠 처리합니다.
 
 | 다른 사람과의 최고 유사도 | 해석 | 처리 |
 | --- | --- | --- |
-| 매우 높음 | 같은 사람이 다른 계정으로 등록했거나 쌍둥이 | 자동 거절하지 않고 보류 후 사람이 확인 |
-| 식별 threshold 근처 | 닮은 사람이 gallery에 있음 | 등록은 진행하고 두 사람을 유사인 쌍으로 표시 |
+| 매우 높음 | 같은 사람이 다른 계정으로 등록했거나 쌍둥이 | 자동 거절하지 않고 보류한 뒤 사람이 확인 |
+| 식별 threshold 근처 | 닮은 사람이 gallery에 있음 | 등록은 진행하고 두 사람을 닮은 쌍으로 표시 |
 | 낮음 | 문제 없음 | 그대로 commit |
 
-유사인 쌍으로 표시된 사람은 식별 때 추가 확인을 거치게 할 수 있습니다.
-토스 페이스페이는 닮은 얼굴이 있는 사용자에게 얼굴 인식 후 휴대폰 뒷자리 입력 같은 2차 인증을 요구한다고 밝혔습니다 \[12\].
+닮은 쌍으로 표시된 사람은 식별할 때 추가 확인을 거치게 할 수 있습니다.
+토스 페이스페이는 닮은 얼굴이 있는 사용자에게 얼굴 인식 뒤 휴대폰 번호 뒷자리 입력 같은 2차 인증을 요구한다고 밝혔습니다 [\[12\]](#ref-12).
 
-`retired` 상태는 재등록 직후 문제가 생겼을 때 되돌리기 위한 짧은 유예용입니다.
+### 재등록과 `retired`
+
+commit은 기존 `active` 템플릿을 지우지 않고 `retired`로 바꿉니다. 재등록 직후 문제가 생겼을 때 되돌리기 위한 짧은 유예입니다.
 유예 기간이 지나면 주기 작업이 실제로 삭제합니다. 쓰지 않는 템플릿을 무기한 보관할 근거는 없습니다.
 
 ## 4. 검색과 판정
 
 Gallery를 잘 만들어도 판정 규칙이 느슨하면 미등록자가 누군가로 식별됩니다.
 1:N 서비스에서는 "가장 비슷한 사람을 찾는 것"보다 "gallery에 없는 사람을 없다고 답하는 것"이 더 어렵고 더 중요합니다.
-토스도 미등록자가 등록자 중 한 명으로 인식되면 결제 사고로 이어진다는 점을 강조합니다 \[12\].
+토스도 미등록자가 등록자 중 한 명으로 인식되면 결제 사고로 이어진다는 점을 강조합니다 [\[12\]](#ref-12).
 
 ### 판정 규칙
 
@@ -586,7 +566,7 @@ def identify(
     return top_subject, "match"
 ```
 
-같은 일을 DB에서 하면 다음과 같습니다. 벡터 인덱스가 없으면 pgvector는 전수 비교(exact search)를 합니다 \[3\].
+같은 일을 DB에서 하면 다음과 같습니다. 벡터 인덱스가 없으면 pgvector는 전수 비교(exact search)를 합니다 [\[3\]](#ref-3).
 
 ```sql
 SELECT subject_ref, max(1 - (embedding <=> $1)) AS score
@@ -596,18 +576,20 @@ GROUP BY subject_ref
 ORDER BY score DESC
 LIMIT 2;
 ```
+
 ### threshold는 gallery 크기와 함께 정한다
 
-모델 카드에서 흔히 보는 "FAR(False Accept Rate) 0.001%"는 **얼굴 두 개를 한 번 비교했을 때** 다른 사람을 같은 사람으로 잘못 판정할 확률입니다. 
-서로 다른 두 사람의 얼굴을 10만 번 비교하면 그중 1번 정도는 우연히 threshold를 넘는다는 뜻입니다.
+모델 카드에서 흔히 보는 "FAR(False Accept Rate) 0.001%"는 **얼굴 두 장을 한 번 비교했을 때** 다른 사람을 같은 사람으로 잘못 판정할 확률입니다.
+서로 다른 두 사람의 얼굴을 10만 번 비교하면 1번 정도는 우연히 threshold를 넘는다는 뜻입니다.
 
 > 엄밀히 말하면 비교 한 번 단위의 이 수치는 FMR(False Match Rate)이고, FAR은 재시도 정책 등을 포함한 시스템 수준의 수치입니다. 모델 카드의 FAR은 대부분 FMR을 뜻하므로 이 글에서는 FMR로 통일합니다.
 
-이 값은 모델의 고정된 성능이 아니라 **threshold에 따라 달라지는 값**입니다. 
-threshold를 올리면 FMR은 내려가지만, 대신 본인을 거절하는 비율이 올라갑니다.
+이 값은 모델의 고정된 성능이 아니라 **threshold에 따라 달라지는 값**입니다.
+threshold를 올리면 FMR은 내려가지만, 그만큼 본인을 거절하는 비율이 올라갑니다.
 
 #### 1:1 인증과 1:N 식별은 다르다
-![](/images/face-enrollment/fmr-vs-fpir.png)
+
+![1:1 인증은 템플릿 하나와 한 번 비교하고, 1:N 식별은 gallery의 N명 모두와 비교한다](/images/face-enrollment/fmr-vs-fpir.png)
 
 1:1 인증은 "당신이 A가 맞습니까?"라는 질문입니다. A의 템플릿과 한 번만 비교하므로, 다른 사람이 A로 통과할 확률은 FMR 그대로입니다.
 
@@ -617,17 +599,16 @@ threshold를 올리면 FMR은 내려가지만, 대신 본인을 거절하는 비
 
 비교 한 번을 당첨 확률 10만분의 1짜리 복권 한 장이라고 생각해 보겠습니다. 여기서 당첨은 오매칭(False Match)입니다. 1:1 인증은 복권을 한 장 사는 것이고, gallery가 1만 명인 1:N 검색은 한 번에 복권을 1만 장 사는 것입니다. 한 장의 당첨 확률은 낮아도 1만 장 중 하나라도 당첨될 확률은 무시할 수 없습니다.
 
-NIST는 이 관계를 다음 식으로 설명합니다 [9].
+NIST는 이 관계를 다음 식으로 설명합니다 [\[9\]](#ref-9).
 
 $$
 \mathrm{FPIR}(N) = 1 - (1 - \mathrm{FMR})^N \approx N \cdot \mathrm{FMR}
 $$
 
-비교 한 번에서 오매칭이 안 날 확률은 1 − FMR입니다. 
-각 비교가 서로 독립이라고 가정하면, 
-N번 모두 안 날 확률은 $(1 − FMR)^N$입니다.
-1에서 이 값을 빼면 하나라도 오매칭이 날 확률이 됩니다. 
-N과 FMR이 작을 때는 대략 N·FMR과 같으므로 **FPIR은 gallery 크기에 거의 비례한다**고 기억하면 됩니다.
+비교 한 번에서 오매칭이 나지 않을 확률은 $1 - \mathrm{FMR}$입니다.
+각 비교가 서로 독립이라고 가정하면 N번 모두 나지 않을 확률은 $(1 - \mathrm{FMR})^N$이고,
+1에서 이 값을 빼면 한 번이라도 오매칭이 날 확률이 됩니다.
+$N \cdot \mathrm{FMR}$이 작을 때는 이 값이 $N \cdot \mathrm{FMR}$과 거의 같으므로, **FPIR은 gallery 크기에 거의 비례한다**고 기억하면 됩니다.
 
 FMR이 0.001%(1e-5)인 threshold를 그대로 쓰면 gallery 크기에 따라 FPIR은 다음과 같습니다.
 
@@ -653,6 +634,8 @@ $$
 이 트레이드오프를 받아들일지는 운영 판단이며, gallery가 커질 때마다 threshold를 다시 점검해야 하는 이유이기도 합니다.
 
 ```python
+import numpy as np
+
 def fpir_from_fmr(fmr: float, n: int) -> float:
     return 1 - (1 - fmr) ** n
 
@@ -667,17 +650,17 @@ print(fpir_from_fmr(1e-5, 10_000))   # 0.0951...
 #### 비교 대상(N)을 줄이는 방법
 
 threshold를 올리는 대신 비교 대상(N) 자체를 줄이는 방법도 있습니다.
-직원 1만 명인 회사의 출입 시스템에서 연구실처럼 관련 임직원만 들어갈 수 있는 구역이라면,
-그 구역의 단말기는 gallery 전체가 아니라 출입 권한이 있는 사람과만 비교하면 됩니다.
+직원 1만 명인 회사의 출입 시스템을 예로 들면, 연구실처럼 일부 직원만 들어갈 수 있는 구역의 단말기는
+gallery 전체가 아니라 출입 권한이 있는 사람과만 비교하면 됩니다.
 권한자가 500명이면 모델 카드 기준의 threshold를 그대로 써도 FPIR은 약 9.5%에서 약 0.5%로 내려갑니다.
 
 #### 주의할 점
 
-이 식은 모든 비교가 서로 독립이라는 가정 위에 있습니다. 
-실제로는 유난히 닮은 사람들이 있고, 인구 집단에 따라 점수 분포도 다릅니다. 
+이 식은 모든 비교가 서로 독립이라는 가정 위에 있습니다.
+실제로는 유난히 닮은 사람들이 있고, 인구 집단에 따라 점수 분포도 다릅니다.
 따라서 이 식은 경향을 이해하는 도구로 쓰고, 실제 threshold는 자체 데이터로 측정해서 정해야 합니다.
 
-더군다나 사람당 템플릿을 K개 저장하면 비교 횟수는 N×K로 늘어납니다. 
+또 사람당 템플릿을 K개 저장하면 비교 횟수는 N×K로 늘어납니다.
 다만 같은 사람의 템플릿끼리는 서로 비슷해서, 한 템플릿이 미등록자와 우연히 닮았다면 나머지도 함께 닮았을 가능성이 큽니다.
 그래서 FPIR이 K배까지 늘지는 않습니다.
 N×K는 상한으로 보고, 실제 증가폭은 운영과 같은 방식(사람 단위로 최고 점수를 취하는 방식)으로 직접 측정하는 것이 정확합니다.
@@ -685,21 +668,20 @@ N×K는 상한으로 보고, 실제 증가폭은 운영과 같은 방식(사람 
 ### Vector DB와 ANN은 언제 필요한가
 
 Vector DB는 벡터를 저장하고, 주어진 벡터와 가까운 벡터를 빠르게 찾아 주는 저장소입니다.
-임베딩 검색 시스템을 만든다고 하면 Vector DB부터 떠올리는 경우가 많지만, 먼저 구분해야 할 것이 있습니다.
-Vector DB의 빠른 검색은 대부분 HNSW [10] 같은 ANN(**approximate** nearest neighbor) 인덱스에서 나오고, ANN은 속도의 대가로 "가장 가까운 벡터를 항상 찾는다"는 보장을 포기합니다.
-그렇다고 Vector DB가 HNSW와 같은 ANN 인덱스만 지원하는 것은 아닙니다.
-대부분의 Vector DB와 pgvector는 인덱스 없이 전수 비교하는 exact search도 지원합니다.
-트레이드오프는 Vector DB가 아니라 ANN 인덱스에서 생깁니다.
+임베딩 검색이라고 하면 Vector DB부터 떠올리기 쉽지만, 먼저 구분할 것이 있습니다.
+Vector DB의 빠른 검색은 대부분 HNSW [\[10\]](#ref-10) 같은 ANN(**approximate** nearest neighbor) 인덱스에서 나오고, ANN은 속도를 얻는 대신 "가장 가까운 벡터를 항상 찾는다"는 보장을 포기합니다.
+반면 대부분의 Vector DB와 pgvector는 인덱스 없이 전수 비교하는 exact search도 지원합니다.
+즉 정확도를 내주는 트레이드오프는 Vector DB라는 저장소가 아니라 ANN 인덱스에서 생깁니다.
 
 #### ANN이 판정에 미치는 영향
 
-HNSW는 파라미터를 적절히 잡으면 recall이 높게 나오고, 등록된 본인은 보통 타인보다 점수가 뚜렷하게 높아 잘 찾아집니다.
-문제는 놓치는 경우가 점수가 비슷한 후보가 몰린 threshold 경계 근처에 집중된다는 점입니다.
+HNSW는 파라미터를 적절히 잡으면 recall이 높고, 등록된 본인은 보통 타인보다 점수가 뚜렷하게 높아 잘 찾아집니다.
+문제는 놓치는 경우가 threshold 경계 근처, 즉 점수가 비슷한 후보가 몰린 곳에 집중된다는 점입니다.
 
 - 본인의 템플릿을 놓치면 남은 후보는 대개 threshold 아래이므로 `no_match`가 됩니다. 본인 거절이 늘어납니다.
 - 드물게는 본인 대신 threshold를 넘는 닮은 사람이 1위로 올라와, 다른 사람으로 식별됩니다.
 - 2위를 놓치면 1위와의 점수 차가 실제보다 크게 계산되어, `ambiguous`로 걸러야 할 경우가 `match`로 통과합니다.
-- 메타데이터 필터와 함께 쓰면 결과가 더 줄어듭니다. pgvector의 근사 인덱스는 인덱스를 탐색한 뒤에 `WHERE` 조건을 적용하기 때문입니다 [3]. pgvector 0.8 이상에서는 iterative scan으로 완화할 수 있습니다.
+- 메타데이터 필터와 함께 쓰면 결과가 더 줄어듭니다. pgvector의 근사 인덱스는 인덱스를 탐색한 뒤에 `WHERE` 조건을 적용하기 때문입니다 [\[3\]](#ref-3). pgvector 0.8 이상에서는 iterative scan으로 완화할 수 있습니다.
 
 이런 오류는 로그에 흔적을 남기지 않고 인덱스 파라미터에 따라 달라지기 때문에, 문제가 생겼을 때 원인을 추적하기 어렵습니다.
 
@@ -728,19 +710,6 @@ exact search만 쓸 거라면 별도 Vector DB를 처음부터 도입할 이유�
 
 그래서 PostgreSQL + pgvector로 시작하는 것을 권합니다. 인덱스가 없으면 exact search로 동작하고, 템플릿과 세션이 같은 트랜잭션 안에 있으며, 규모가 커지면 같은 테이블에 HNSW partial index를 추가하는 것으로 ANN으로 넘어갈 수 있습니다. 별도 Vector DB는 템플릿이 수백만 개 이상이라 서버 한 대의 메모리에 담기 어렵거나 검색 QPS가 높아 수평 확장이 필요할 때 검토합니다. 그때도 등록 상태와 원본 템플릿은 PostgreSQL에 두고, Vector DB는 검색 전용 사본으로 동기화하는 구조가 안전합니다.
 
-#### exact search로 충분한 규모는 생각보다 크다
-
-512차원 float32 템플릿 10만 개는 약 205MB이고, 전수 비교는 행렬 곱 한 번입니다. 일반적인 서버 CPU에서 수십 ms 안에 끝나는 규모입니다(대략적인 추정이므로 실제 환경에서 측정해야 합니다).
-
-| 상황 | 권장 |
-| --- | --- |
-| 템플릿 수십만 개 이하 | exact search. 인덱스를 만들지 않는다 |
-| 그 이상이고 지연 시간 예산을 넘는다 | ANN으로 후보 top-k를 뽑고, 후보들의 템플릿 전체로 점수를 다시 정확히 계산한다 |
-| 지점·조직 단위로 검색 범위가 나뉜다 | 범위별 exact search. 파티션이나 partial index를 활용한다 |
-| 임베딩을 애플리케이션 레벨에서 암호화한다 | DB 인덱스를 쓸 수 없다. 복호화 후 메모리에서 exact search |
-
-ANN을 도입한다면 exact search 결과와 비교한 recall을 배포 전에 측정하고, 운영 중에도 주기적으로 다시 측정합니다.
-
 ## 5. 악의적 등록과 제시 공격
 
 공격 지점은 등록과 식별 두 곳이고, 등록 쪽이 더 위험합니다. 식별 단계의 공격은 한 번의 오수락으로 끝나지만, 잘못 등록된 템플릿은 삭제될 때까지 계속 통과합니다.
@@ -749,7 +718,7 @@ ANN을 도입한다면 exact search 결과와 비교한 recall을 배포 전에 
 
 | 유형 | 예 | 대응 |
 | --- | --- | --- |
-| 제시 공격(presentation attack) | 카메라 앞에 사진, 영상, 마스크를 댐 | liveness(PAD) 모델. 평가 기준은 ISO/IEC 30107-3 \[11\] |
+| 제시 공격(presentation attack) | 카메라 앞에 사진, 영상, 마스크를 댐 | liveness(PAD) 모델. 평가 기준은 ISO/IEC 30107-3 [\[11\]](#ref-11) |
 | 주입 공격(injection attack) | 가상 카메라나 조작된 API 요청으로 이미지를 직접 보냄 | 세션 nonce, 클라이언트 무결성 확인, 서버 측 재검증 |
 | 타인 명의 등록 | 본인 얼굴을 다른 회원 계정에 등록 | 등록 전 본인 확인, 감독자 입회, 중복 검사(3장) |
 
@@ -773,7 +742,7 @@ liveness 모델은 카메라 앞의 위조만 막습니다. 카메라를 거치�
 | 세션당 프레임 | 총 시도 횟수 상한 | 세션 종료 |
 | 기기당 liveness 실패율 | 평소 대비 급증 감지 | 알림 후 조사 |
 
-Apple Face ID도 얼굴 매칭이 5회 실패하면 passcode를 요구합니다 \[7\]. 
+Apple Face ID도 얼굴 매칭이 5회 실패하면 passcode를 요구합니다 [\[7\]](#ref-7). 
 얼굴 인식이 유일한 수단이 아니어야 rate limit을 걸 수 있다는 점이 중요합니다.
 
 ```python
@@ -797,20 +766,20 @@ def record_failure(device_id: str) -> None:
 
 ## 6. 템플릿 보호
 
-"원본 이미지가 아니라 벡터만 저장하니 안전하다"는 성립하지 않습니다.
+"원본 이미지 대신 벡터만 저장하니 안전하다"는 생각은 성립하지 않습니다.
 임베딩에서 얼굴 이미지를 복원할 수 있고, 얼굴은 비밀번호와 달리 유출되어도 바꿀 수 없습니다.
 같은 모델로 다시 등록하면 거의 같은 임베딩이 나오기 때문입니다.
 
 ### 임베딩이 유출되면 무엇이 가능한가
 
-- **얼굴 복원**: Mai et al.은 대상 모델의 내부 구조와 대상 인물에 대한 사전 지식 없이(모델은 블랙박스로만 사용) 템플릿에서 얼굴을 복원했습니다. 복원 이미지를 템플릿의 원본 이미지와 비교했을 때 LFW에서 FAR 0.1% 기준 95.20%가 같은 사람으로 판정됐습니다. 같은 사람의 다른 이미지와 비교하면 성공률은 크게 낮아집니다 \[13\].
-- **다른 시스템으로의 전이**: Shahreza와 Marcel은 복원한 얼굴이 다른 특징 추출 모델을 쓰는 인식 시스템에도 통한다는 것을 보였습니다 \[14\].
+- **얼굴 복원**: Mai et al.은 대상 모델의 내부 구조와 대상 인물에 대한 사전 지식 없이(모델은 블랙박스로만 사용) 템플릿에서 얼굴을 복원했습니다. 복원 이미지를 템플릿의 원본 이미지와 비교했을 때 LFW에서 FAR 0.1% 기준 95.20%가 같은 사람으로 판정됐습니다. 같은 사람의 다른 이미지와 비교하면 성공률은 크게 낮아집니다 [\[13\]](#ref-13).
+- **다른 시스템으로의 전이**: Shahreza와 Marcel은 복원한 얼굴이 다른 특징 추출 모델을 쓰는 인식 시스템에도 통한다는 것을 보였습니다 [\[14\]](#ref-14).
 - **연결**: 같은 모델을 쓰는 두 DB가 유출되면 임베딩만으로 동일인을 이어 붙일 수 있습니다. 모델이 달라도 복원 이미지를 거치면 연결이 가능합니다.
 
 현실적인 피해 대상은 2D 이미지로 판정하는 서버 측 인식 시스템입니다.
-깊이 정보를 요구하고 템플릿을 기기 안에만 두는 방식(예: Face ID \[7\])에는 복원한 2D 이미지가 그대로 통하지 않습니다.
+깊이 정보를 요구하고 템플릿을 기기 안에만 두는 방식(예: Face ID [\[7\]](#ref-7))에는 복원한 2D 이미지가 그대로 통하지 않습니다.
 
-ISO/IEC 24745는 생체 템플릿 보호 요건으로 비가역성(irreversibility), 연결 불가능성(unlinkability), 갱신 가능성(renewability)을 듭니다 \[15\].
+ISO/IEC 24745는 생체 템플릿 보호 요건으로 비가역성(irreversibility), 연결 불가능성(unlinkability), 갱신 가능성(renewability)을 듭니다 [\[15\]](#ref-15).
 평문 임베딩은 셋 다 만족하지 못합니다.
 
 ### 보호 수단: 누가 복호화하는가
@@ -819,7 +788,7 @@ ISO/IEC 24745는 생체 템플릿 보호 요건으로 비가역성(irreversibili
 
 - **저장소 암호화**: 디스크에 쓰이는 데이터를 스토리지나 DB 엔진이 암호화합니다. 디스크·볼륨 암호화와 DB의 TDE(Transparent Data Encryption)가 여기에 속합니다. 정상적인 DB 계정으로 조회하면 DB 엔진이 자동으로 복호화해 평문을 돌려줍니다. 그래서 디스크 탈취나 백업 매체 유출은 막지만, DB 계정 탈취나 DB 계정으로 받은 dump는 막지 못합니다.
 - **가명화 분리**: 임베딩과 사용자 식별자를 다른 테이블이나 저장소에 나눠 두고, 둘을 잇는 매핑을 별도로 관리합니다. 벡터만 유출됐을 때 식별자와 바로 연결되는 것을 막습니다. 다만 얼굴 복원을 거친 재식별은 막지 못합니다.
-- **애플리케이션 레벨 암호화**: 애플리케이션이 임베딩을 암호화한 뒤 DB에 넣습니다. DB는 처음부터 암호문만 받고, 복호화는 애플리케이션만 할 수 있습니다. 키는 보통 envelope 방식으로 관리합니다. 데이터는 데이터 키(DEK)로 암호화하고, DEK는 KMS에 있는 마스터 키로 다시 암호화해 암호문 옆에 저장합니다. 마스터 키는 KMS 밖으로 나오지 않습니다.
+- **애플리케이션 레벨 암호화**: 애플리케이션이 임베딩을 암호화한 뒤 DB에 넣습니다. DB는 처음부터 암호문만 받고, 복호화는 애플리케이션만 할 수 있습니다. 키는 보통 envelope 방식으로 관리합니다. 데이터는 데이터 키(DEK)로 암호화하고, DEK는 KMS에 있는 마스터 키(KEK)로 다시 암호화해 암호문 옆에 저장합니다. 마스터 키는 KMS 밖으로 나오지 않습니다.
 - **암호화 상태 매칭**: 동형암호 등을 써서 암호문끼리 바로 유사도를 계산합니다. 복호화 키를 서버 밖(클라이언트나 별도 키 서버)에 두면 서버도 평문을 보지 못합니다.
 
 ### 어떻게 조합하는가
@@ -837,12 +806,12 @@ ISO/IEC 24745는 생체 템플릿 보호 요건으로 비가역성(irreversibili
 | 운영 부담 | 낮음 | 중간. 키 관리, 메모리 평문의 core dump·swap 차단 | 높음. 구현·검증 부담 |
 
 A와 B의 차이는 DB만 유출됐을 때 드러납니다.
-DB에 접근하는 경로와 사람은 애플리케이션 서버보다 훨씬 많으므로, 이 차이가 B를 더할 이유가 됩니다.
+DB에 접근하는 경로와 사람(분석 쿼리, 백업 작업, 운영자 계정 등)은 애플리케이션 서버보다 훨씬 많으므로, 이 차이만으로도 B를 더할 이유가 됩니다.
 B에서는 DB가 암호문만 가지므로 유사도 계산을 DB 안에서 할 수 없고, 애플리케이션이 복호화한 벡터를 메모리에 올려 검색합니다.
 처음부터 검색을 애플리케이션 메모리에서 하던 구성이라면, 복호화가 기동과 commit 시점에만 일어나므로 검색 비용은 늘지 않습니다.
 
 애플리케이션 서버 침해는 A와 B 모두 막지 못하고, C만이 키를 서버 밖에 둘 때 막을 수 있습니다.
-암호화한 채로 비교하는 방식은 연구가 진행 중이고 \[16\], 토스처럼 벡터를 암호화한 상태로 비교한다고 밝힌 상용 사례도 있습니다 \[12\].
+암호화한 채로 비교하는 방식은 연구가 진행 중이고 [\[16\]](#ref-16), 토스처럼 벡터를 암호화한 상태로 비교한다고 밝힌 상용 사례도 있습니다 [\[12\]](#ref-12).
 다만 직접 구현하기에는 연산 비용과 검증 부담이 큽니다.
 
 ### 기본 구성 제안
@@ -855,8 +824,7 @@ B에서는 DB가 암호문만 가지므로 유사도 계산을 DB 안에서 할 
 
 ### 법적 요건
 
-국내에서는 생체인식정보를 저장할 때 암호화하는 것이 고시상 의무입니다 \[19\].
-암호화 여부는 선택 사항이 아닙니다.
+국내에서는 생체인식정보를 저장할 때 암호화해야 하며, 이는 고시에 명시된 의무입니다 [\[19\]](#ref-19).
 다만 저장소 암호화만으로 요건을 충족하는지, 애플리케이션 레벨 암호화까지 필요한지는 법무 검토로 확인해야 합니다.
 
 ### 가명화 분리
@@ -934,22 +902,22 @@ Audit 로그는 보존 기간을 정하고 그 뒤에는 삭제합니다. 공용
 
 ## 7. 법적 절차: 동의, 파기, 대체 수단
 
-얼굴 템플릿은 개인정보 보호법상 민감정보이므로 일반 개인정보와 구분된 별도 동의가 필요합니다 \[17\]\[18\]. 이 장은 국내 법령을 설계에 어떻게 반영할지 정리한 것이며 법률 자문이 아닙니다. 조문과 고시는 개정되므로 현행본과 법무 검토로 확인해야 합니다.
+얼굴 템플릿은 개인정보 보호법상 민감정보이므로 일반 개인정보와 구분된 별도 동의가 필요합니다 [\[17\]](#ref-17)[\[18\]](#ref-18). 이 장은 국내 법령을 설계에 어떻게 반영할지 정리한 것이며 법률 자문이 아닙니다. 조문과 고시는 개정되므로 현행본과 법무 검토로 확인해야 합니다.
 
 ### 요구 사항과 설계 반영
 
-개인정보보호위원회의 생체정보 보호 가이드라인은 인증·식별 목적의 생체인식정보를 원본정보(촬영한 얼굴 이미지)와 특징정보(임베딩)로 나누고, 특징정보를 민감정보로 봅니다 \[18\].
+개인정보보호위원회의 생체정보 보호 가이드라인은 인증·식별 목적의 생체인식정보를 원본정보(촬영한 얼굴 이미지)와 특징정보(임베딩)로 나누고, 특징정보를 민감정보로 봅니다 [\[18\]](#ref-18).
 
 | 요구 | 설계 반영 |
 | --- | --- |
 | 민감정보 처리에 대한 별도 동의 | `consent_id` 없이는 등록 세션을 만들 수 없게 스키마로 강제 |
 | 원본정보는 특징정보 생성 후 파기가 원칙 | 이미지는 메모리에서만 처리, 저장소와 로그에 남기지 않음 |
-| 생체인식정보 암호화 저장 \[19\] | 6장의 저장소 암호화와 envelope 암호화 |
+| 생체인식정보 암호화 저장 [\[19\]](#ref-19) | 6장의 저장소 암호화와 envelope 암호화 |
 | 생체인식을 원치 않는 사람을 위한 대체 수단 | 얼굴 등록 없이도 같은 서비스를 쓸 수 있는 경로 제공 |
 | 목적 달성, 보유 기간 만료, 동의 철회 시 파기 | 아래 삭제 절차 |
 
 규모가 크거나 새로운 방식이라면 개인정보보호위원회의 사전적정성 검토를 받는 방법도 있습니다.
-토스 페이스페이가 이 절차를 거쳤다고 밝혔습니다 \[22\].
+토스 페이스페이도 이 절차를 거쳤다고 밝혔습니다 [\[22\]](#ref-22).
 
 ### 동의 기록
 
@@ -1013,7 +981,7 @@ async def withdraw(consent_id: UUID, user=Depends(current_user)):
 - 외모가 크게 바뀌어 인식되지 않는 사람
 - rate limit에 걸린 기기
 
-Apple Face ID는 passcode 설정을 전제로 하고 \[7\], 토스는 닮은 얼굴이 있는 사용자에게 2차 인증을 요구합니다 \[12\].
+Apple Face ID는 passcode 설정을 전제로 하고 [\[7\]](#ref-7), 토스는 닮은 얼굴이 있는 사용자에게 2차 인증을 요구합니다 [\[12\]](#ref-12).
 비밀번호, QR, 휴대폰 번호 확인처럼 본인이 명시적으로 제시하는 수단을 하나 이상 둡니다.
 
 ## 8. 잊힐 권리: 얼굴 템플릿 폐기
@@ -1025,7 +993,7 @@ Apple Face ID는 passcode 설정을 전제로 하고 \[7\], 토스는 닮은 얼
 | 계기 | 근거 | 처리 |
 | --- | --- | --- |
 | 동의 철회, 처리정지 요구 | 개인정보 보호법 제37조 | 식별 대상에서 즉시 제외한 뒤 폐기 |
-| 삭제 요구 | 같은 법 제36조 | 폐기 후 결과를 요구받은 날부터 10일 이내에 통지 \[23\] |
+| 삭제 요구 | 같은 법 제36조 | 폐기 후 결과를 요구받은 날부터 10일 이내에 통지 [\[23\]](#ref-23) |
 | 보유 기간 만료, 목적 달성(탈퇴, 이용 종료) | 같은 법 제21조 | 지체 없이 폐기 |
 | 재등록이나 모델 교체로 쓰지 않게 된 구 템플릿 | 목적 달성 | 유예 기간 후 폐기 |
 | 완료되지 않은 등록 세션 | 목적 달성 | 만료 시 staging 삭제 |
@@ -1146,7 +1114,7 @@ async def run_erasure(request_id: UUID) -> None:
 
 원본 이미지를 보관하지 않는 설계에서 모델 교체는 곧 전원 재등록입니다.
 새 모델로 임베딩을 다시 뽑을 이미지가 없기 때문입니다.
-그래서 모델 버전 업데이트는 비용과 편익을 따져봐서 범위를 신중하게 결정해야합니다.
+그래서 모델 교체는 비용과 이득을 따져 보고 범위를 신중하게 정해야 합니다.
 
 ### 전환 방법
 
@@ -1155,9 +1123,9 @@ async def run_erasure(request_id: UUID) -> None:
 | 신규만 새 모델, 기존은 점진 전환 | 전환 기간에 두 모델을 함께 돌림 | 추론 비용 2배. 모델별 threshold를 따로 관리 |
 | 인증 성공 시 자동 갱신 | 구 모델로 높은 신뢰도로 식별되면 같은 프레임을 새 모델로 임베딩해 적립 | 동의 범위에 포함돼야 함. 오수락이 새 템플릿으로 굳을 위험 |
 | 명시적 재등록 캠페인 | 기한을 두고 재등록 안내 | 참여율. 미참여자는 대체 수단으로 전환 |
-| 하위 호환 학습 | 새 모델의 임베딩이 구 모델 임베딩과 비교 가능하도록 학습 \[20\] | 모델을 직접 학습할 때만 가능 |
+| 하위 호환 학습 | 새 모델의 임베딩이 구 모델 임베딩과 비교 가능하도록 학습 [\[20\]](#ref-20) | 모델을 직접 학습할 때만 가능 |
 
-자동 갱신은 Apple Face ID가 인증 성공 시 얼굴 데이터를 갱신하는 것과 같은 발상입니다 \[7\].
+자동 갱신은 Apple Face ID가 인증 성공 시 얼굴 데이터를 갱신하는 것과 같은 발상입니다 [\[7\]](#ref-7).
 식별 프레임은 등록 프레임보다 품질이 낮으므로, 품질과 liveness 기준을 등록 수준으로 적용하고 여러 번 적립된 뒤에 활성화합니다.
 
 ### 절차
@@ -1204,7 +1172,7 @@ def identify_multi(aligned_face, models, galleries, cfg):
 
 ### 주기적 재등록은 필요한가
 
-얼굴은 시간이 지나며 변하지만, 성인의 경우 그 속도는 생각보다 느립니다. Best-Rowden과 Jain의 종단 연구는 본인 간 점수가 시간에 따라 내려가도 대상자의 99%가 약 6년까지는 FAR 0.01%에서 인식된다고 보고했습니다 \[21\]. 이 연구는 성인 mugshot과 당시 상용 matcher를 대상으로 했으므로 그대로 일반화할 수는 없습니다.
+얼굴은 시간이 지나며 변하지만, 성인의 경우 그 속도는 생각보다 느립니다. Best-Rowden과 Jain의 종단 연구는 본인 간 점수가 시간에 따라 내려가도 대상자의 99%가 약 6년까지는 FAR 0.01%에서 인식된다고 보고했습니다 [\[21\]](#ref-21). 이 연구는 성인 mugshot과 당시 상용 matcher를 대상으로 했으므로 그대로 일반화할 수는 없습니다.
 
 따라서 6개월이나 1년 주기의 재등록을 노화만으로 정당화하기는 어렵습니다. 대신 두 가지를 권합니다.
 
@@ -1215,7 +1183,7 @@ def identify_multi(aligned_face, models, galleries, cfg):
 
 ## 10. 운영 모니터링
 
-운영 로그의 `match`와 `no_match` 비율만으로는 FAR과 FRR을 알 수 없습니다. `no_match`에는 정상적으로 거절된 미등록자와 잘못 거절된 회원이 섞여 있고, `match`에는 정상 식별과 오식별이 섞여 있습니다. 정답이 없는 로그에서는 직접 측정할 수 있는 것과 추정만 가능한 것을 나눠서 봐야 합니다.
+운영 로그의 `match`와 `no_match` 비율만으로는 FPIR과 FNIR을 알 수 없습니다. `no_match`에는 정상적으로 거절된 미등록자와 잘못 거절된 회원이 섞여 있고, `match`에는 정상 식별과 오식별이 섞여 있습니다. 정답이 없는 로그에서는 직접 측정할 수 있는 것과 추정만 가능한 것을 나눠서 봐야 합니다.
 
 ### 지표
 
@@ -1302,29 +1270,29 @@ Gallery DB 설계는 벡터를 어디에 넣을지보다 "무엇을 근거로 �
 
 ## References
 
-1. J. Deng, J. Guo, N. Xue, S. Zafeiriou. "ArcFace: Additive Angular Margin Loss for Deep Face Recognition." CVPR 2019. [arXiv:1801.07698](https://arxiv.org/abs/1801.07698)
-2. Q. Meng, S. Zhao, Z. Huang, F. Zhou. "MagFace: A Universal Representation for Face Recognition and Quality Assessment." CVPR 2021. [arXiv:2103.06627](https://arxiv.org/abs/2103.06627)
-3. pgvector: Open-source vector similarity search for Postgres. [github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
-4. S. Sengupta et al. "Frontal to Profile Face Verification in the Wild." WACV 2016. [PDF](https://engineering.jhu.edu/vpatel36/wp-content/uploads/2018/08/WACV2016_CFP.pdf)
-5. B. Maze et al. "IARPA Janus Benchmark - C: Face Dataset and Protocol." ICB 2018.
-6. J. Yang et al. "Neural Aggregation Network for Video Face Recognition." CVPR 2017. [arXiv:1603.05474](https://arxiv.org/abs/1603.05474)
-7. Apple. "About Face ID advanced technology." [support.apple.com/en-us/102381](https://support.apple.com/en-us/102381)
-8. P. Terhörst et al. "SER-FIQ: Unsupervised Estimation of Face Image Quality Based on Stochastic Embedding Robustness." CVPR 2020. [arXiv:2003.09373](https://arxiv.org/abs/2003.09373)
-9. P. Grother, M. Ngan, K. Hanaoka. "Face Recognition Vendor Test (FRVT) Part 2: Identification." NISTIR 8271. [doi:10.6028/NIST.IR.8271](https://doi.org/10.6028/NIST.IR.8271) 및 NIST, "Relating 1:1 and 1:N False Positive Rates." [PDF](https://pages.nist.gov/frvt/reports/demographics/implications_for_1N.pdf)
-10. Y. Malkov, D. Yashunin. "Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs." IEEE TPAMI, 2020. [arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
-11. ISO/IEC 30107-3. "Biometric presentation attack detection - Part 3: Testing and reporting."
-12. 지디넷코리아. "700만명 모은 토스 '페이스페이'…보안 난이도, 금융권 수준 강화." 2026-09-02. [zdnet.co.kr](https://zdnet.co.kr/view/?no=20260902101653)
-13. G. Mai, K. Cao, P. C. Yuen, A. K. Jain. "On the Reconstruction of Face Images from Deep Face Templates." IEEE TPAMI 41(5), 2019. [arXiv:1703.00832](https://arxiv.org/abs/1703.00832)
-14. H. O. Shahreza, S. Marcel. "Face Reconstruction from Facial Templates by Learning Latent Space of a Generator Network." NeurIPS 2023. [papers.neurips.cc](https://papers.neurips.cc/paper_files/paper/2023/hash/29e4b51d45dc8f534260adc45b587363-Abstract-Conference.html)
-15. ISO/IEC 24745. "Information security, cybersecurity and privacy protection - Biometric information protection."
-16. V. N. Boddeti. "Secure Face Matching Using Fully Homomorphic Encryption." BTAS 2018.
-17. 개인정보 보호법 제23조(민감정보의 처리 제한), 같은 법 시행령 제18조(민감정보의 범위).
-18. 개인정보보호위원회. "생체정보 보호 가이드라인." 2021-09. 해설 기사: [보안뉴스](https://m.boannews.com/html/detail.html?idx=102064), [법률신문](https://www.lawtimes.co.kr/news/articleViewAmp.html?idxno=172836)
-19. 개인정보보호위원회 고시. "개인정보의 안전성 확보조치 기준" 제7조(개인정보의 암호화).
-20. Y. Shen, Y. Xiong, W. Xia, S. Soatto. "Towards Backward-Compatible Representation Learning." CVPR 2020. [arXiv:2003.11942](https://arxiv.org/abs/2003.11942)
-21. L. Best-Rowden, A. K. Jain. "Longitudinal Study of Automatic Face Recognition." IEEE TPAMI 40(1), 2018.
-22. 토스. "토스, '페이스페이' 가입자 100만 명 돌파." 2025-11-18. [toss.im](https://toss.im/tossfeed/article/42877)
-
-23) 개인정보 보호법 제21조(개인정보의 파기), 제36조(개인정보의 정정·삭제), 제37조(개인정보의 처리정지 등), 같은 법 시행령 제43조. [시행령 제43조 조문](https://itwiki.kr/w/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4_%EB%B3%B4%ED%98%B8%EB%B2%95_%EC%8B%9C%ED%96%89%EB%A0%B9_%EC%A0%9C43%EC%A1%B0)
+1. <a id="ref-1"></a>J. Deng, J. Guo, N. Xue, S. Zafeiriou. "ArcFace: Additive Angular Margin Loss for Deep Face Recognition." CVPR 2019. [arXiv:1801.07698](https://arxiv.org/abs/1801.07698)
+2. <a id="ref-2"></a>Q. Meng, S. Zhao, Z. Huang, F. Zhou. "MagFace: A Universal Representation for Face Recognition and Quality Assessment." CVPR 2021. [arXiv:2103.06627](https://arxiv.org/abs/2103.06627)
+3. <a id="ref-3"></a>pgvector: Open-source vector similarity search for Postgres. [github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
+4. <a id="ref-4"></a>S. Sengupta et al. "Frontal to Profile Face Verification in the Wild." WACV 2016. [PDF](https://engineering.jhu.edu/vpatel36/wp-content/uploads/2018/08/WACV2016_CFP.pdf)
+5. <a id="ref-5"></a>B. Maze et al. "IARPA Janus Benchmark - C: Face Dataset and Protocol." ICB 2018. [doi:10.1109/ICB2018.2018.00033](https://doi.org/10.1109/ICB2018.2018.00033)
+6. <a id="ref-6"></a>J. Yang et al. "Neural Aggregation Network for Video Face Recognition." CVPR 2017. [arXiv:1603.05474](https://arxiv.org/abs/1603.05474)
+7. <a id="ref-7"></a>Apple. "About Face ID advanced technology." [support.apple.com/en-us/102381](https://support.apple.com/en-us/102381)
+8. <a id="ref-8"></a>P. Terhörst et al. "SER-FIQ: Unsupervised Estimation of Face Image Quality Based on Stochastic Embedding Robustness." CVPR 2020. [arXiv:2003.09373](https://arxiv.org/abs/2003.09373)
+9. <a id="ref-9"></a>P. Grother, M. Ngan, K. Hanaoka. "Face Recognition Vendor Test (FRVT) Part 2: Identification." NISTIR 8271. [doi:10.6028/NIST.IR.8271](https://doi.org/10.6028/NIST.IR.8271) 및 NIST, "Relating 1:1 and 1:N False Positive Rates." [PDF](https://pages.nist.gov/frvt/reports/demographics/implications_for_1N.pdf)
+10. <a id="ref-10"></a>Y. Malkov, D. Yashunin. "Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs." IEEE TPAMI, 2020. [arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
+11. <a id="ref-11"></a>ISO/IEC 30107-3. "Biometric presentation attack detection - Part 3: Testing and reporting." [iso.org](https://www.iso.org/standard/79520.html)
+12. <a id="ref-12"></a>지디넷코리아. "700만명 모은 토스 '페이스페이'…보안 난이도, 금융권 수준 강화." 2026-09-02. [zdnet.co.kr](https://zdnet.co.kr/view/?no=20260902101653)
+13. <a id="ref-13"></a>G. Mai, K. Cao, P. C. Yuen, A. K. Jain. "On the Reconstruction of Face Images from Deep Face Templates." IEEE TPAMI 41(5), 2019. [arXiv:1703.00832](https://arxiv.org/abs/1703.00832)
+14. <a id="ref-14"></a>H. O. Shahreza, S. Marcel. "Face Reconstruction from Facial Templates by Learning Latent Space of a Generator Network." NeurIPS 2023. [papers.neurips.cc](https://papers.neurips.cc/paper_files/paper/2023/hash/29e4b51d45dc8f534260adc45b587363-Abstract-Conference.html)
+15. <a id="ref-15"></a>ISO/IEC 24745:2022. "Information security, cybersecurity and privacy protection - Biometric information protection." [iso.org](https://www.iso.org/standard/75302.html)
+16. <a id="ref-16"></a>V. N. Boddeti. "Secure Face Matching Using Fully Homomorphic Encryption." BTAS 2018. [arXiv:1805.00577](https://arxiv.org/abs/1805.00577)
+17. <a id="ref-17"></a>개인정보 보호법 제23조(민감정보의 처리 제한), 같은 법 시행령 제18조(민감정보의 범위). [국가법령정보센터](https://www.law.go.kr/법령/개인정보보호법)
+18. <a id="ref-18"></a>개인정보보호위원회. "생체정보 보호 가이드라인." 2021-09. 해설 기사: [보안뉴스](https://m.boannews.com/html/detail.html?idx=102064), [법률신문](https://www.lawtimes.co.kr/news/articleViewAmp.html?idxno=172836)
+19. <a id="ref-19"></a>개인정보보호위원회 고시. "개인정보의 안전성 확보조치 기준" 제7조(개인정보의 암호화). [국가법령정보센터](https://www.law.go.kr/행정규칙/개인정보의안전성확보조치기준)
+20. <a id="ref-20"></a>Y. Shen, Y. Xiong, W. Xia, S. Soatto. "Towards Backward-Compatible Representation Learning." CVPR 2020. [arXiv:2003.11942](https://arxiv.org/abs/2003.11942)
+21. <a id="ref-21"></a>L. Best-Rowden, A. K. Jain. "Longitudinal Study of Automatic Face Recognition." IEEE TPAMI 40(1), 2018. [doi:10.1109/TPAMI.2017.2652466](https://doi.org/10.1109/TPAMI.2017.2652466)
+22. <a id="ref-22"></a>토스. "토스, '페이스페이' 가입자 100만 명 돌파." 2025-11-18. [toss.im](https://toss.im/tossfeed/article/42877)
+23. <a id="ref-23"></a>개인정보 보호법 제21조(개인정보의 파기), 제36조(개인정보의 정정·삭제), 제37조(개인정보의 처리정지 등), 같은 법 시행령 제43조. [시행령 제43조 조문](https://itwiki.kr/w/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4_%EB%B3%B4%ED%98%B8%EB%B2%95_%EC%8B%9C%ED%96%89%EB%A0%B9_%EC%A0%9C43%EC%A1%B0)
 
 24) Baltanas, S.-F.; Ruiz-Sarmiento, J.-R.; Gonzalez-Jimenez, J. Improving the Head Pose Variation Problem in Face Recognition for Mobile Robots. Sensors 2021, 21, 659. doi:10.3390/s21020659
+24. <a id="ref-24"></a>A. Baltanas et al. "Improving the Head Pose Variation Problem in Face Recognition for Mobile Robots." Sensors 21(2):659, 2021. [doi:10.3390/s21020659](https://doi.org/10.3390/s21020659)
