@@ -25,6 +25,11 @@ app.use(cors({
 
 app.use(express.json());
 
+// npm run dev 전용: 파일 저장 시 브라우저 자동 새로고침
+const sendDevIndex = process.argv.includes('--live-reload')
+  ? (await import('./lib/live-reload.js')).attachLiveReload(app)
+  : null;
+
 // posting된 글 불러오기
 app.get('/api/posts', async (_, res) => {
   res.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
@@ -53,7 +58,8 @@ app.get('/api/health', (_, res) => {
 app.use(express.static('public'));
 
 // SPA Fallback
-app.get('*', (_, res) => {
+app.get('*', (req, res) => {
+  if (sendDevIndex) return sendDevIndex(req, res);
   res.sendFile('public/index.html', { root: '.' });
 });
 

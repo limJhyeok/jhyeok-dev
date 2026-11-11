@@ -5,7 +5,7 @@
   "main": "api/index.js",
   "type": "module",
   "scripts": {
-    "dev": "node api/index.js",
+    "dev": "node --watch-path=api api/index.js --live-reload",
     "start": "node api/index.js",
     "prepare": "husky",
     "lint": "eslint api/ public/scripts/",
