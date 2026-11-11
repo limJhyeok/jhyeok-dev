@@ -30,14 +30,17 @@ const sendDevIndex = process.argv.includes('--live-reload')
   ? (await import('./lib/live-reload.js')).attachLiveReload(app)
   : null;
 
+// stale-while-revalidate는 브라우저 캐시에도 적용돼, 개발 중엔 수정한 글 대신 이전 응답이 먼저 뜬다.
+const cacheControl = value => (sendDevIndex ? 'no-store' : value);
+
 // posting된 글 불러오기
 app.get('/api/posts', async (_, res) => {
-  res.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+  res.set('Cache-Control', cacheControl('public, s-maxage=60, stale-while-revalidate=300'));
   res.json(await getAllPosts());
 });
 
 app.get('/api/posts/:id', async (req, res) => {
-  res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  res.set('Cache-Control', cacheControl('public, s-maxage=300, stale-while-revalidate=600'));
   res.json(await getPost(req.params.id));
 });
 
