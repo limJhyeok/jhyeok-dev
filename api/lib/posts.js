@@ -47,7 +47,14 @@ export async function getAllPosts() {
   );
 }
 
+// 없는 글이면 null. id 는 URL 에서 오므로 posts 디렉터리 밖(../)을 가리키지 못하게 막는다.
 export async function getPost(id) {
-  const raw = await fs.readFile(path.join(POSTS_DIR, id), 'utf-8');
-  return parseFrontmatter(raw);
+  if (path.basename(id) !== id || !id.endsWith('.md')) return null;
+  try {
+    const raw = await fs.readFile(path.join(POSTS_DIR, id), 'utf-8');
+    return parseFrontmatter(raw);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
 }

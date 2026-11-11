@@ -40,8 +40,11 @@ app.get('/api/posts', async (_, res) => {
 });
 
 app.get('/api/posts/:id', async (req, res) => {
+  const post = await getPost(req.params.id);
+  // 파일명을 바꾸면 옛 주소가 404 가 된다. 그 404 를 edge 에 캐시하면 같은 이름으로 되돌려도 한동안 안 보인다.
+  if (!post) return res.set('Cache-Control', 'no-store').status(404).json({ error: 'Post not found' });
   res.set('Cache-Control', cacheControl('public, s-maxage=300, stale-while-revalidate=600'));
-  res.json(await getPost(req.params.id));
+  res.json(post);
 });
 
 // ============ Profile ============

@@ -507,6 +507,12 @@ async function showPostDetail(postId) {
   try {
     // Markdown 원문 가져오기
     const res = await fetch(`${API_BASE}/posts/${postId}`);
+    if (res.status === 404) {
+      // 없는 글(파일명이 바뀐 옛 링크 등)은 빈 화면 대신 전체 목록으로 — 없는 카테고리와 같은 처리
+      history.replaceState(null, '', '#/');
+      applyRoute();
+      return;
+    }
     const { meta, content } = await res.json();
 
     // 목록을 거치지 않고 바로 상세로 들어온 경우에도 목차를 만들 수 있게 보강
