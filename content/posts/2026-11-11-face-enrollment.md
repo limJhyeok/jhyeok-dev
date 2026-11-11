@@ -169,10 +169,13 @@ Probe가 항상 정면으로 협조하는 환경(e.g., Apple Face ID)이라면 �
 
 ### 질문 1. 정렬 모듈이 존재하는데 다각도 등록이 필요한지?
 
-정렬 모듈은 얼굴을 정면으로 돌려 주지 않습니다.
+정렬 모듈은 모든 얼굴을 정면으로 돌려 주지 않습니다.
 InsightFace류의 정렬은 landmark 5점을 기준 좌표에 맞추는 2D similarity transform입니다.
-평면 내 회전(roll), 크기, 위치는 보정하지만 고개를 좌우(yaw)나 상하(pitch)로 돌린 것은 그대로 남습니다.
+이 변환으로 보정되는 것은 이미지 평면 안의 변화, 즉 평면 내 회전(roll), 크기, 위치입니다.
+고개를 좌우(yaw)나 상하(pitch)로 돌린 것은 이미지 평면 밖의 회전이라 그대로 남습니다.
 옆얼굴은 정렬 후에도 옆얼굴이고, 가려진 반쪽은 복원되지 않습니다.
+
+<figure style="margin:1.5rem 0;"><a href="/images/face-enrollment/align.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/face-enrollment/align.png" alt="5점 정렬 전후를 비교한 두 패널. 왼쪽 (a)는 기울어진 얼굴, 작게 찍힌 얼굴, 프레임 한쪽에 치우친 얼굴이 정렬 후 모두 같은 112×112 정면 얼굴이 되고 랜드마크 5점이 기준점과 겹친다. 오른쪽 (b)는 옆으로 돌린 얼굴과 위에서 내려다본 얼굴로, 정렬 후에도 옆얼굴과 눌린 얼굴이 남고 랜드마크가 기준점과 어긋난다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.6;"><strong>5점 정렬(2D similarity transform)이 보정하는 변화와 보정하지 못하는 변화.</strong> (a) 위에서부터 roll, scale, translation. 모두 이미지 평면 안의 변화라 정렬 후 같은 정면 얼굴이 되고, 검출된 랜드마크 5점(●)이 기준점(+)과 일치합니다. (b) 위는 yaw 60°, 아래는 pitch 35°. 평면 밖의 회전이라 정렬은 랜드마크 5점을 기준점에 최대한 가깝게 맞출 뿐 일치시키지 못합니다. Yaw는 옆얼굴이 그대로 남고, pitch는 눈–입 세로 간격이 눌린 채 남습니다. 회전과 균일한 크기 조정만으로는 세로 방향만 늘릴 수 없기 때문입니다. 3D 모델: MakeHuman base mesh (CC0).</figcaption></figure>
 
 모델 자체도 pose에 완전히 강건하지는 않습니다.
 ArcFace류의 학습 데이터는 웹에서 수집한 in-the-wild 이미지라 여러 각도가 섞여 있지만, 대부분 정면에 치우쳐 있습니다 \[24\].
