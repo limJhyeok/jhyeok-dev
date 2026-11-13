@@ -4,6 +4,8 @@ date: 2026-09-21
 category: ai
 summary: CCTV에 찍힌 얼굴(Probe)이 등록 DB(Gallery)의 누구인지 판정하기까지의 전 과정을 정리합니다. 얼굴을 512차원 벡터로 바꾸는 Embedder, 코사인 유사도가 비교 기준이 된 이유, Detection → Alignment → Representation 3단계의 역할 분담, InsightFace `app.get()` 한 줄의 내부 동작과 `norm_crop`의 아핀 변환, 사전학습 모델의 라이선스 제약과 대안, CPU 정렬과 GPU 배치 추론을 분리하는 속도 최적화, Detector를 교체할 때 맞춰야 할 랜드마크 규격, 그리고 Gallery와 Probe 파이프라인이 어긋났을 때 벌어지는 일까지 다룹니다.
 tags: ["CCTV", "Face Recognition", "InsightFace", "ArcFace", "Computer Vision"]
+series: CCTV 영상 분석
+series_order: 1
 ---
 
 > **TL;DR**

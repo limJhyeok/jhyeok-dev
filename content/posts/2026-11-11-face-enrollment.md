@@ -5,7 +5,7 @@ category: ai
 summary: 사전학습 임베딩 모델로 1:N 얼굴 식별 서비스를 만들 때, 모델 선택 이후에 남는 gallery DB와 API 설계를 정리합니다. 무엇을 저장할지, 정면 1장과 다각도 N-shot 등록 전략, staging 후 commit하는 등록 프로토콜, gallery 크기에 맞춘 threshold(FMR vs FPIR)와 exact search·ANN 선택, 악의적 등록 대응, 템플릿 암호화, 동의·폐기 같은 법적 절차, 모델 마이그레이션과 운영 모니터링까지 다룹니다.
 tags: ["CCTV", "Face Recognition", "Face Enrollment", "Vector Search", "Privacy", "Computer Vision"]
 series: CCTV 영상 분석
-series_order: 4
+series_order: 2
 ---
 
 ## Intro

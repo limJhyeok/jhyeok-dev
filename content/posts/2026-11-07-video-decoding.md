@@ -5,7 +5,7 @@ category: ai
 summary: CCTV 녹화본처럼 프레임 간격이 일정하지 않은 VFR 영상에서 OpenCV의 seek(CAP_PROP_POS_MSEC / POS_FRAMES)방식이 경고 없이 엉뚱한 프레임을 돌려주는 이유. CFR과 VFR, PTS와 컨테이너 인덱스, Keyframe과 GOP를 정리하고, VFR 판별법과 순차 디코딩·PyAV seek·CFR 변환 같은 대처법, 그리고 VFR이 AI 모델(MOT의 Kalman Filter)에 끼치는 영향까지 다룹니다.
 tags: ["CCTV", "Video Decoding", "OpenCV", "FFmpeg", "VFR", "Computer Vision"]
 series: CCTV 영상 분석
-series_order: 3
+series_order: 5
 ---
 
 > **TL;DR**
@@ -19,7 +19,7 @@ series_order: 3
 > **② (seek를 믿을 수 없을 때) 프레임마다 실제 시각(PTS)을 읽으면서 처음부터 순차 디코딩**하거나
 > **③ 분석 전에 CFR로 변환**합니다.
 
-이 글은 CCTV 영상 분석 시리즈의 세 번째 글입니다. <a href="#" data-series-post="2026-09-12-cctv-tracking.md">앞 글</a>에서는 전신 추적(MOT)으로 궤적을 먼저 잇고 그 위에 신원을 붙이는 구조를 다뤘습니다. 이번에는 그보다 한 단계 앞, **영상에서 프레임을 꺼내는 단계**에서 조용히 생기는 문제를 다룹니다.
+이 글은 CCTV 영상 분석 시리즈의 다섯 번째 글입니다. <a href="#" data-series-post="2026-09-12-cctv-tracking.md">앞 글</a>에서는 전신 추적(MOT)으로 궤적을 먼저 잇고 그 위에 신원을 붙이는 구조를 다뤘습니다. 이번에는 그보다 한 단계 앞, **영상에서 프레임을 꺼내는 단계**에서 조용히 생기는 문제를 다룹니다.
 
 ## 문제 제기
 

@@ -5,7 +5,7 @@ category: ai
 summary: 얼굴만으로 매 프레임을 식별하려는 구조의 한계를 짚고, 전신 추적(MOT)으로 궤적을 먼저 이어 붙인 뒤 그 궤적에 신원을 붙이는 방식을 정리합니다. MOT의 여섯 가지 오류 유형과 ID Switch, Kalman Filter와 Re-ID 모듈의 역할 분담, 얼굴 프레임을 고르는 품질 게이트(FIQA), 프레임별 판단을 궤적 하나의 결론으로 합치는 결합 규칙과 미등록 인물 처리까지 다룹니다.
 tags: ["CCTV", "Multi-Object Tracking", "Face Recognition", "Re-ID", "Computer Vision"]
 series: CCTV 영상 분석
-series_order: 2
+series_order: 4
 ---
 
 > **TL;DR**
