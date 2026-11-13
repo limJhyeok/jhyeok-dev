@@ -1,10 +1,10 @@
 ---
-title: "Smart CCTV, Video decoding 주의사항(CFR vs VFR)"
+title: "CCTV 영상 분석, Video decoding 주의사항(CFR vs VFR)"
 date: 2026-11-07
 category: ai
 summary: CCTV 녹화본처럼 프레임 간격이 일정하지 않은 VFR 영상에서 OpenCV의 seek(CAP_PROP_POS_MSEC / POS_FRAMES)방식이 경고 없이 엉뚱한 프레임을 돌려주는 이유. CFR과 VFR, PTS와 컨테이너 인덱스, Keyframe과 GOP를 정리하고, VFR 판별법과 순차 디코딩·PyAV seek·CFR 변환 같은 대처법, 그리고 VFR이 AI 모델(MOT의 Kalman Filter)에 끼치는 영향까지 다룹니다.
-tags: ["Smart CCTV", "Video Decoding", "OpenCV", "FFmpeg", "VFR", "Computer Vision"]
-series: Smart CCTV
+tags: ["CCTV", "Video Decoding", "OpenCV", "FFmpeg", "VFR", "Computer Vision"]
+series: CCTV 영상 분석
 series_order: 3
 ---
 
@@ -19,7 +19,7 @@ series_order: 3
 > **② (seek를 믿을 수 없을 때) 프레임마다 실제 시각(PTS)을 읽으면서 처음부터 순차 디코딩**하거나
 > **③ 분석 전에 CFR로 변환**합니다.
 
-이 글은 Smart CCTV 시리즈의 세 번째 글입니다. <a href="#" data-series-post="2026-09-12-smart-cctv-tracking.md">앞 글</a>에서는 전신 추적(MOT)으로 궤적을 먼저 잇고 그 위에 신원을 붙이는 구조를 다뤘습니다. 이번에는 그보다 한 단계 앞, **영상에서 프레임을 꺼내는 단계**에서 조용히 생기는 문제를 다룹니다.
+이 글은 CCTV 영상 분석 시리즈의 세 번째 글입니다. <a href="#" data-series-post="2026-09-12-cctv-tracking.md">앞 글</a>에서는 전신 추적(MOT)으로 궤적을 먼저 잇고 그 위에 신원을 붙이는 구조를 다뤘습니다. 이번에는 그보다 한 단계 앞, **영상에서 프레임을 꺼내는 단계**에서 조용히 생기는 문제를 다룹니다.
 
 ## 문제 제기
 
@@ -344,7 +344,7 @@ NVDEC은 다음과 같은 경로로 쓸 수 있습니다.
 프레임을 정확히 꺼냈다고 끝이 아닙니다.
 많은 모델과 알고리즘이 **프레임 간격이 일정하다**는 가정을 암묵적으로 깔고 있습니다.
 
-<a href="#" data-series-post="2026-09-12-smart-cctv-tracking.md">앞 글</a>에서 다룬 MOT의 Kalman Filter가 대표적입니다. 
+<a href="#" data-series-post="2026-09-12-cctv-tracking.md">앞 글</a>에서 다룬 MOT의 Kalman Filter가 대표적입니다. 
 SORT·DeepSORT 계열의 Kalman Filter는 보통 **등속 운동 모델**을 쓰고, 한 스텝을 "프레임 하나"로 둡니다.
 
 $$\text{다음 위치} = \text{현재 위치} + \text{속도} \times 1\ (\text{프레임})$$
@@ -575,4 +575,4 @@ ffmpeg -i vfr.mp4 -c copy vfr.ts
 - ISO/IEC 14496-12 (ISO Base Media File Format) — MP4의 샘플 테이블(`stts`·`ctts`·`stss`)
 - [tell-mia, 가변 프레임 레이트(VFR) 정리](https://tell-mia.tistory.com/46)
 - [Cloudinary, Variable Frame Rate](https://cloudinary.com/glossary/variable-frame-rate)
-- 같은 시리즈: <a href="#" data-series-post="2026-09-12-smart-cctv-tracking.md">Smart CCTV, 얼굴이 보이지 않는 구간은 누구인가</a> — 7절에서 다룬 Kalman Filter와 ID Switch
+- 같은 시리즈: <a href="#" data-series-post="2026-09-12-cctv-tracking.md">CCTV 영상 분석, 얼굴이 보이지 않는 구간은 누구인가</a> — 7절에서 다룬 Kalman Filter와 ID Switch

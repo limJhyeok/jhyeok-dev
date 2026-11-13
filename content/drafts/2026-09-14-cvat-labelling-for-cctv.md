@@ -1,9 +1,9 @@
 ---
-title: "Smart CCTV 평가 데이터, CVAT으로 GT 쌓기"
+title: "CCTV 영상 분석 평가 데이터, CVAT으로 GT 쌓기"
 date: 2026-09-14
 category: ai
 summary: Probe Quality Evaluation의 전제인 GT를 실제로 쌓는 과정을 CVAT으로 정리합니다. 분석 축을 먼저 정하고 라벨 스키마로 옮기는 법, immutable/mutable 속성이 왜 person_id와 blurred를 가르는지, track 모드와 보간으로 라벨링 비용을 줄이는 법, GPU 없이 CPU만으로 얼굴 검출기와 트래커를 붙이는 법, 그리고 궤적 중심의 export를 프레임 중심 평가 스키마로 뒤집는 변환까지 실제 영상과 실측 수치로 다룹니다.
-tags: ["Smart CCTV", "CVAT", "Annotation", "Data Quality", "Computer Vision"]
+tags: ["CCTV", "CVAT", "Annotation", "Data Quality", "Computer Vision"]
 ---
 
 > **TL;DR**
@@ -20,7 +20,7 @@ tags: ["Smart CCTV", "CVAT", "Annotation", "Data Quality", "Computer Vision"]
 
 ## 1. 이 글의 범위
 
-앞선 글 **「Smart CCTV, 문제는 알고리즘일까 영상 품질일까」** 에서 Probe Quality Evaluation의 측정 절차를 정리하면서, 그 전제로 GT 라벨링 스키마를 이렇게 제시했습니다.
+앞선 글 **「CCTV 영상 분석, 문제는 알고리즘일까 영상 품질일까」** 에서 Probe Quality Evaluation의 측정 절차를 정리하면서, 그 전제로 GT 라벨링 스키마를 이렇게 제시했습니다.
 
 ```json
 {

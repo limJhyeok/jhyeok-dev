@@ -1,10 +1,10 @@
 ---
-title: "Smart CCTV, 얼굴이 보이지 않는 구간은 누구인가"
+title: "CCTV 영상 분석, 얼굴이 보이지 않는 구간은 누구인가"
 date: 2026-09-12
 category: ai
 summary: 얼굴만으로 매 프레임을 식별하려는 구조의 한계를 짚고, 전신 추적(MOT)으로 궤적을 먼저 이어 붙인 뒤 그 궤적에 신원을 붙이는 방식을 정리합니다. MOT의 여섯 가지 오류 유형과 ID Switch, Kalman Filter와 Re-ID 모듈의 역할 분담, 얼굴 프레임을 고르는 품질 게이트(FIQA), 프레임별 판단을 궤적 하나의 결론으로 합치는 결합 규칙과 미등록 인물 처리까지 다룹니다.
-tags: ["Smart CCTV", "Multi-Object Tracking", "Face Recognition", "Re-ID", "Computer Vision"]
-series: Smart CCTV
+tags: ["CCTV", "Multi-Object Tracking", "Face Recognition", "Re-ID", "Computer Vision"]
+series: CCTV 영상 분석
 series_order: 2
 ---
 
@@ -16,11 +16,11 @@ series_order: 2
 >
 > 그러려면 두 가지를 더 정해야 합니다. **어떤 얼굴을 물어볼 것인가**, **여러 프레임의 답을 어떻게 합칠 것인가**.
 
-Smart CCTV 시스템을 만들 때, 사람들의 얼굴이 잘 찍히도록 설치를 해도 어쩔수 없이 거리가 멀어지는 경우도 존재하고 사람들의 키가 모두 달라서 얼굴 각도가 달라지기도 합니다. 또한 카메라를 등지는 경우 소프트웨어로 얼굴 인식 기술을 아무리 개선해도 화면에 얼굴이 나오지 않기 때문에 애초에 인식하기 불가능합니다.
+CCTV 영상 분석 시스템을 만들 때, 사람들의 얼굴이 잘 찍히도록 설치를 해도 어쩔수 없이 거리가 멀어지는 경우도 존재하고 사람들의 키가 모두 달라서 얼굴 각도가 달라지기도 합니다. 또한 카메라를 등지는 경우 소프트웨어로 얼굴 인식 기술을 아무리 개선해도 화면에 얼굴이 나오지 않기 때문에 애초에 인식하기 불가능합니다.
 
 예를 들어 같은 인물들이 카메라 쪽으로 걸어오는 장면을 세 구간으로 끊어서 **얼굴 영역만** 검출하고, 검출된 얼굴을 등록 DB와 대조한 유사도를 box 위에 적어보면 이 제약이 그대로 드러납니다.
 
-<div style="display:flex;gap:0.6rem;align-items:flex-start;flex-wrap:wrap;margin:1.5rem 0;"><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/face-detection-001.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/face-detection-001.png" alt="역광을 받아 실루엣처럼 어둡게 보이는 원경 장면. 네 사람의 머리에 작은 주황색 얼굴 bounding box가 하나씩 있고, 각 box 위에 회색 라벨로 ??? 14%, ??? 9%, ??? 17%, ??? 11%가 적혀 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">① 원경·역광 — 얼굴 box는 네 명 모두 잡혔지만 유사도가 10%대에 머물러 전부 "???"</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/face-detection-002.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/face-detection-002.png" alt="인물들이 가까워져 옷과 이목구비가 또렷하게 보이는 중거리 장면. 네 사람의 얼굴 bounding box 위에 주황색 라벨로 Zoro 71%, Luffy 65%, Sanji 68%, Usopp 63%가 적혀 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">② 적정 거리 — 네 명 모두 60~70%대로 등록 DB와 매칭</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/face-detection-003.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/face-detection-003.png" alt="인물들이 더 가까이 다가와 상체가 화면을 가득 채운 근접 장면. 세 사람의 얼굴 box에는 Zoro 84%, Luffy 81%, Usopp 79% 라벨이 붙어 있지만, 키가 커서 머리가 화면 위로 잘려 나간 정장 차림 인물은 회색 ??? 13% 라벨이 붙어 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">③ 근접 — 세 명은 80%대로 올라가지만, 머리가 프레임 위로 잘린 인물은 다시 "???"</figcaption></figure></div>
+<div style="display:flex;gap:0.6rem;align-items:flex-start;flex-wrap:wrap;margin:1.5rem 0;"><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/face-detection-001.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/face-detection-001.png" alt="역광을 받아 실루엣처럼 어둡게 보이는 원경 장면. 네 사람의 머리에 작은 주황색 얼굴 bounding box가 하나씩 있고, 각 box 위에 회색 라벨로 ??? 14%, ??? 9%, ??? 17%, ??? 11%가 적혀 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">① 원경·역광 — 얼굴 box는 네 명 모두 잡혔지만 유사도가 10%대에 머물러 전부 "???"</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/face-detection-002.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/face-detection-002.png" alt="인물들이 가까워져 옷과 이목구비가 또렷하게 보이는 중거리 장면. 네 사람의 얼굴 bounding box 위에 주황색 라벨로 Zoro 71%, Luffy 65%, Sanji 68%, Usopp 63%가 적혀 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">② 적정 거리 — 네 명 모두 60~70%대로 등록 DB와 매칭</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/face-detection-003.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/face-detection-003.png" alt="인물들이 더 가까이 다가와 상체가 화면을 가득 채운 근접 장면. 세 사람의 얼굴 box에는 Zoro 84%, Luffy 81%, Usopp 79% 라벨이 붙어 있지만, 키가 커서 머리가 화면 위로 잘려 나간 정장 차림 인물은 회색 ??? 13% 라벨이 붙어 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">③ 근접 — 세 명은 80%대로 올라가지만, 머리가 프레임 위로 잘린 인물은 다시 "???"</figcaption></figure></div>
 
 *프라이버시 보호를 위해 실제 CCTV 영상이 아닌 애니메이션 장면으로 치환했습니다. 유사도 수치는 실제 모델 추론 결과가 아니라 설명을 위한 예시입니다*
 
@@ -34,7 +34,7 @@ Smart CCTV 시스템을 만들 때, 사람들의 얼굴이 잘 찍히도록 설�
 
 앞의 세 장면을 이번에는 얼굴이 아니라 **인물 전체**를 기준으로 다시 보겠습니다.
 
-<div style="display:flex;gap:0.6rem;align-items:flex-start;flex-wrap:wrap;margin:1.5rem 0;"><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/tracking-001.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/tracking-001.png" alt="앞서 나온 역광 원경 장면과 동일한 구도. 얼굴이 아니라 네 사람의 몸 전체를 감싸는 세로로 긴 주황색 bounding box가 그려져 있고, 각 box 위에 id-001부터 id-004까지 라벨이 붙어 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">① 실루엣만 보여도 네 개의 궤적이 모두 유지됩니다</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/tracking-002.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/tracking-002.png" alt="앞서 나온 중거리 장면과 동일한 구도. 네 사람의 몸 전체를 감싸는 세로로 긴 주황색 bounding box에 id-001부터 id-004까지 라벨이 붙어 있고, 각 인물의 옷차림이 box 안에 뚜렷하게 담겨 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">② 옷차림·체형이 또렷해져도 ID는 ①과 동일하게 이어집니다</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/smart-cctv-tracking/tracking-003.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/smart-cctv-tracking/tracking-003.png" alt="앞서 나온 근접 장면과 동일한 구도. 얼굴 검출에서 ???로 남았던 정장 차림 인물을 포함해 네 사람 모두 몸 전체를 감싸는 주황색 bounding box와 id-001부터 id-004까지의 라벨을 유지하고 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">③ 얼굴이 잘려 나간 id-003도 끊김 없이 유지됩니다</figcaption></figure></div>
+<div style="display:flex;gap:0.6rem;align-items:flex-start;flex-wrap:wrap;margin:1.5rem 0;"><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/tracking-001.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/tracking-001.png" alt="앞서 나온 역광 원경 장면과 동일한 구도. 얼굴이 아니라 네 사람의 몸 전체를 감싸는 세로로 긴 주황색 bounding box가 그려져 있고, 각 box 위에 id-001부터 id-004까지 라벨이 붙어 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">① 실루엣만 보여도 네 개의 궤적이 모두 유지됩니다</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/tracking-002.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/tracking-002.png" alt="앞서 나온 중거리 장면과 동일한 구도. 네 사람의 몸 전체를 감싸는 세로로 긴 주황색 bounding box에 id-001부터 id-004까지 라벨이 붙어 있고, 각 인물의 옷차림이 box 안에 뚜렷하게 담겨 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">② 옷차림·체형이 또렷해져도 ID는 ①과 동일하게 이어집니다</figcaption></figure><figure style="flex:1 1 210px;margin:0;"><a href="/images/cctv-tracking/tracking-003.png" target="_blank" rel="noopener" style="border-bottom:none;"><img src="/images/cctv-tracking/tracking-003.png" alt="앞서 나온 근접 장면과 동일한 구도. 얼굴 검출에서 ???로 남았던 정장 차림 인물을 포함해 네 사람 모두 몸 전체를 감싸는 주황색 bounding box와 id-001부터 id-004까지의 라벨을 유지하고 있다" style="width:100%;margin:0;"></a><figcaption style="font-size:0.82rem;color:#666;margin-top:0.5rem;line-height:1.5;">③ 얼굴이 잘려 나간 id-003도 끊김 없이 유지됩니다</figcaption></figure></div>
 
 얼굴 기준에서는 ②에서만 온전했던 정보가, 인물 전체 기준에서는 ①·②·③ 모두에서 유지됩니다. 즉 **화면에 계속 이어지는 선을 만드는 일은 얼굴이 아니라 전신 추적이 담당**합니다.
 
@@ -42,7 +42,7 @@ Smart CCTV 시스템을 만들 때, 사람들의 얼굴이 잘 찍히도록 설�
 
 여기서 일반적으로 Multi Object Tracking은 우리처럼 얼굴을 통해서 특정 인물을 누구라고 식별하는 것은 아니고 각 객체에 대해 임의의 ID를 부여하는 형식입니다. 위 그림의 `id-001` \~ `id-004`가 바로 그 임의의 ID입니다. 이 단계에서 얻은 것은 "네 사람이 각각 끊기지 않고 이어져 있다"는 사실뿐이고, 그 궤적이 현실의 누구인지는 아직 비어 있습니다. 이 빈칸을 채워주는 것이 미리 등록해 둔 얼굴 DB(Gallery)입니다.
 
-<div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin:1.5rem 0;"><img src="/images/smart-cctv-tracking/zoro-gallery.png" alt="초록색 머리에 금색 귀걸이를 한 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/smart-cctv-tracking/luffy-gallery.png" alt="검은 단발 머리에 얼굴에 흉터가 있는 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/smart-cctv-tracking/sanji-gallery.png" alt="금발 앞머리가 한쪽 눈을 덮은 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/smart-cctv-tracking/usopp-gallery.png" alt="곱슬머리에 그물 모양 두건을 쓴 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"></div>
+<div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin:1.5rem 0;"><img src="/images/cctv-tracking/zoro-gallery.png" alt="초록색 머리에 금색 귀걸이를 한 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/cctv-tracking/luffy-gallery.png" alt="검은 단발 머리에 얼굴에 흉터가 있는 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/cctv-tracking/sanji-gallery.png" alt="금발 앞머리가 한쪽 눈을 덮은 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"><img src="/images/cctv-tracking/usopp-gallery.png" alt="곱슬머리에 그물 모양 두건을 쓴 인물의 정면 얼굴 crop" style="flex:1 1 120px;min-width:110px;max-width:180px;margin:0;"></div>
 
 *미리 등록해 둔 Gallery. 통제된 조건에서 잘 찍힌 얼굴이 한 장만 있어도 시작할 수 있고, 각도·조명이 다른 여러 장을 등록해 두면 매칭이 더 안정적입니다*
 
@@ -138,7 +138,7 @@ MOT 추적기(Tracker)는 예측한 궤적 집합 $\hat{\tau}$가 정답 $\tau$�
 
 MOT 시스템 역시 모든 인물을 완벽하게 추적하지는 못합니다. 추적 결과가 어떤 형태로 어긋나는지를 유형별로 알아두면 나중에 문제를 분석하고 디버깅할 때 기준이 생기므로, 여섯 가지 경우를 먼저 정리하겠습니다.
 
-![정답 track과 추론 track이 어긋나는 여섯 가지 경우를 (a)부터 (f)까지 나란히 그린 도식. 정답은 실선 원, 추론 결과는 점선 원으로 표시되어 있다](/images/smart-cctv-tracking/tracking-result-type.png)
+![정답 track과 추론 track이 어긋나는 여섯 가지 경우를 (a)부터 (f)까지 나란히 그린 도식. 정답은 실선 원, 추론 결과는 점선 원으로 표시되어 있다](/images/cctv-tracking/tracking-result-type.png)
 
 *출처: Momir Adžemović, [Deep Learning-Based Multi-Object Tracking: A Comprehensive Survey from Foundations to State-of-the-Art (arXiv:2506.13457)](https://arxiv.org/abs/2506.13457), Fig. 2*
 
@@ -155,7 +155,7 @@ MOT 시스템 역시 모든 인물을 완벽하게 추적하지는 못합니다.
 
 ## Face Detector만 쓸 때와 MOT를 함께 쓸 때
 
-이 error type들을 알고 나면, 얼굴만으로 만든 Smart CCTV와 MOT를 얹은 Smart CCTV의 장단점이 뚜렷하게 갈립니다.
+이 error type들을 알고 나면, 얼굴만으로 만든 시스템과 MOT를 얹은 시스템의 장단점이 뚜렷하게 갈립니다.
 
 <div style="overflow-x:auto;margin:1.5rem 0;">
 <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
@@ -218,7 +218,7 @@ Kalman Filter는 AI 모델이 아니라 베이지안 추론에 기반한 수학�
 
 움직임만으로 부족한 부분을 외형 정보로 메우는 접근이 등장했고, 이를 대표적으로 정착시킨 것이 SORT에 외형 특징을 더한 **DeepSORT**입니다.
 
-![tracking-by-detection 파이프라인 도식. 왼쪽의 video sequence가 object detection model로 들어가 bounding box를 내놓고, 이것이 한쪽으로는 motion-based similarity로, 다른 쪽으로는 ReID model을 거쳐 appearance features가 되어 appearance-based similarity로 들어간다. 두 유사도가 Kalman filter, hungarian algorithm, EMA와 연결되어 최종 tracks를 만든다. object detection model·motion-based similarity·Kalman filter·hungarian algorithm은 노란색 실선 블록이고, ReID model·appearance-based similarity·EMA는 빨간색 점선 블록이다](/images/smart-cctv-tracking/deep-sort-architecture.png)
+![tracking-by-detection 파이프라인 도식. 왼쪽의 video sequence가 object detection model로 들어가 bounding box를 내놓고, 이것이 한쪽으로는 motion-based similarity로, 다른 쪽으로는 ReID model을 거쳐 appearance features가 되어 appearance-based similarity로 들어간다. 두 유사도가 Kalman filter, hungarian algorithm, EMA와 연결되어 최종 tracks를 만든다. object detection model·motion-based similarity·Kalman filter·hungarian algorithm은 노란색 실선 블록이고, ReID model·appearance-based similarity·EMA는 빨간색 점선 블록이다](/images/cctv-tracking/deep-sort-architecture.png)
 
 *그림에서 노란색 실선 블록이 원래의 SORT이고, 빨간색 점선 블록이 DeepSORT가 추가한 부분입니다. 출처: Momir Adžemović, [Deep Learning-Based Multi-Object Tracking: A Comprehensive Survey from Foundations to State-of-the-Art (arXiv:2506.13457)](https://arxiv.org/abs/2506.13457), Fig. 5*
 
@@ -254,7 +254,7 @@ Koide et al.이 RGB-D 카메라 네트워크에서 내린 결론도 같습니다
 
 다만 해당 논문이 동시에 지적하듯 **얼굴은 항상 보이지 않는다**는 것이 결정적인 제약입니다. 저화질, 측면·뒷모습, 조명 변화처럼 얼굴이 제대로 잡히지 않은 프레임의 임베딩은 신원 정보를 거의 담고 있지 않으면서 매칭 점수만 흔들어 놓기 때문에, Gallery DB 조회 전에 **그런 프레임을 걸러내는 품질 필터가 사실상 필수**가 됩니다. 앞서 본 "궤적 안에서 근거가 모이면 나머지 프레임까지 함께 확정된다"는 구조도, 어떤 프레임이 근거로 쓸 만한지 판정할 수 있을 때에만 성립합니다.
 
-![Gallery DB와 프레임별 얼굴 유사도 비교 도식. 왼쪽에는 Luffy, Zoro, Sanji, Usopp 네 명의 gallery 얼굴 이미지가 세로로 놓여 있고, 오른쪽에는 같은 궤적 id-002에서 잘라낸 Luffy의 얼굴 crop 세 장이 나란히 있다. 왼쪽 crop은 32x32 픽셀로 형체만 남은 실루엣이고 네 명에 대한 유사도가 각각 9%, 8%, 7%, 6%로 모두 임계치 40% 아래라 미매칭 처리된다. 가운데 crop은 50x50 픽셀의 흐릿한 정면으로 Luffy 65%, Zoro 21%, Sanji 14%, Usopp 12%다. 오른쪽 crop은 60x60 픽셀의 선명한 정면으로 Luffy 81%, Zoro 17%, Sanji 11%, Usopp 9%다](/images/smart-cctv-tracking/face-similarity-by-quality.png)
+![Gallery DB와 프레임별 얼굴 유사도 비교 도식. 왼쪽에는 Luffy, Zoro, Sanji, Usopp 네 명의 gallery 얼굴 이미지가 세로로 놓여 있고, 오른쪽에는 같은 궤적 id-002에서 잘라낸 Luffy의 얼굴 crop 세 장이 나란히 있다. 왼쪽 crop은 32x32 픽셀로 형체만 남은 실루엣이고 네 명에 대한 유사도가 각각 9%, 8%, 7%, 6%로 모두 임계치 40% 아래라 미매칭 처리된다. 가운데 crop은 50x50 픽셀의 흐릿한 정면으로 Luffy 65%, Zoro 21%, Sanji 14%, Usopp 12%다. 오른쪽 crop은 60x60 픽셀의 선명한 정면으로 Luffy 81%, Zoro 17%, Sanji 11%, Usopp 9%다](/images/cctv-tracking/face-similarity-by-quality.png)
 
 > **예시: 동일 Track 내 Gallery-Probe 간 유사도의 변동성**
 > 동일 Track(궤적) 내 3개 프레임에서 얼굴을 Crop하여 Gallery DB의 4명과 유사도를 대조한 예시입니다.
@@ -280,7 +280,7 @@ Embedder가 좋아할 얼굴을 고르는 방법은 크게 두 갈래입니다.
 - **학습 기반** — 궤적처럼 여러 장이 묶인 이미지들을 통째로 받아, 각 이미지에 매길 가중치를 학습으로 얻는 방식입니다. QAN은 품질 라벨 없이 인식 손실만으로 샘플별 품질 점수를 학습해 임베딩을 가중 합치고, NAN은 attention 모듈로 흐리거나 가려진 얼굴의 비중을 낮춰 이미지 집합 하나를 벡터 하나로 요약합니다. 입력 단위가 **이미지 집합(여러 이미지)** 이라 궤적 단위로 신원을 부여하는 구조와 잘 맞습니다.
 - **휴리스틱** — 해상도, 각도, 블러처럼 계산 가능한 지표로 거르는 방식입니다. 구현이 싸고 해석이 되며, 임계값을 운영 중에 바로 조정할 수 있습니다.
 
-처음 Smart CCTV를 만들 때는 보통 휴리스틱으로 baseline을 세우고, 개선 여지가 확인된 뒤에 학습 기반으로 넘어갑니다. 이 글도 휴리스틱을 기준으로 이야기하겠습니다.
+처음 CCTV 영상 분석 시스템을 만들 때는 보통 휴리스틱으로 baseline을 세우고, 개선 여지가 확인된 뒤에 학습 기반으로 넘어갑니다. 이 글도 휴리스틱을 기준으로 이야기하겠습니다.
 
 ### FIQA — 후보 도구들
 
@@ -293,7 +293,7 @@ Embedder가 좋아할 얼굴을 고르는 방법은 크게 두 갈래입니다.
 | **픽셀** | 정렬된 crop의 Laplacian 분산(블러) |
 | **박스 크기** | 얼굴 최소변 px |
 
-여기서 구분해야 할 것이 있습니다. FIQA는 **"일반적으로 좋은 얼굴 이미지란 무엇인가"** 에 답하는 도구 모음입니다. 반면 Smart CCTV에서 풀어야 하는 문제는 **그 도구들 중 내가 쓰는 Embedder와 정렬(align)된 것이 무엇인지 고르는 것**입니다. 전자는 문헌이 답해주지만, 후자는 내 현장 데이터에서 직접 측정해봐야 합니다.
+여기서 구분해야 할 것이 있습니다. FIQA는 **"일반적으로 좋은 얼굴 이미지란 무엇인가"** 에 답하는 도구 모음입니다. 반면 CCTV 영상 분석에서 풀어야 하는 문제는 **그 도구들 중 내가 쓰는 Embedder와 정렬(align)된 것이 무엇인지 고르는 것**입니다. 전자는 문헌이 답해주지만, 후자는 내 현장 데이터에서 직접 측정해봐야 합니다.
 
 > **참고 — 유사도 분포 자체를 품질 신호로 쓰면 안 될까**
 >
@@ -313,7 +313,7 @@ Embedder가 좋아할 얼굴을 고르는 방법은 크게 두 갈래입니다.
 2. **후보의 예측력을 검증합니다.** 각 지표가 매칭 성패를 실제로 예측하는지 AUROC로 측정하되, 점추정치가 아니라 **인물 단위 부트스트랩 신뢰구간의 하한이 0.5를 넘는지**로 판정합니다. 소수 인물이 신호를 통째로 끌고 있는 경우를 걸러내기 위해서입니다.
 3. **임계값은 AUROC가 아니라 ERC에서 정합니다.** AUROC는 순서를 얼마나 잘 매기는지만 답합니다. 운영에서 답해야 하는 질문은 "하위 몇 %를 버리면 오류율이 얼마가 되는가"이고, 그것은 ERC 곡선에서 읽습니다.
 
-이 과정에서 상식이 자주 깨집니다. "화질이 나쁘면 못 알아본다"는 직관과 달리 블러 지표나 박스 크기가 단독 기준으로는 신뢰구간을 통과하지 못하는 경우가 흔합니다. 각 단계의 구체적인 설계와 함정은 <a href="#" data-series-post="2026-09-10-smart-cctv-probe-evaluation.md">Smart CCTV, 문제는 알고리즘일까 영상 품질일까</a> 글의 5\~6절에 정리해 두었습니다.
+이 과정에서 상식이 자주 깨집니다. "화질이 나쁘면 못 알아본다"는 직관과 달리 블러 지표나 박스 크기가 단독 기준으로는 신뢰구간을 통과하지 못하는 경우가 흔합니다. 각 단계의 구체적인 설계와 함정은 <a href="#" data-series-post="2026-09-10-cctv-probe-evaluation.md">CCTV 영상 분석, 문제는 알고리즘일까 영상 품질일까</a> 글의 5\~6절에 정리해 두었습니다.
 
 
 ## Track에 어떤 person_id를 붙일 것인가
@@ -330,7 +330,7 @@ $$\hat{c} = \arg\max_{c \in C} \; F\big(s_1(c), \dots, s_N(c)\big)$$
 
 즉 $N \times |C|$ 짜리 유사도 표 하나를 놓고 후보 하나를 고르는 문제이고, 여기서 정해야 하는 것은 **결합 함수 $F$** 입니다. [On Combining Classifiers](https://ieeexplore.ieee.org/document/667881)는 이 $F$의 후보들을 베이즈 결정 규칙에서 유도해 정리한 고전입니다.
 
-![결합 규칙 비교 도식. 위쪽에는 Track id-002의 선별된 5개 프레임 f1부터 f5와 Gallery 4명(Luffy, Zoro, Sanji, Usopp)의 유사도를 담은 4행 5열 히트맵 표가 있다. Luffy는 62, 71, 1, 66, 58이고 Zoro는 24, 19, 88, 22, 26, Sanji는 18, 22, 31, 25, 21, Usopp은 15, 17, 24, 19, 23이다. 얼굴이 일부 가려진 f3 열이 빨간 테두리로 강조되어 있는데, 이 프레임에서만 Zoro가 88%로 튀고 Luffy는 1%로 떨어진다. 아래쪽 표는 결합 규칙별 집계 결과다. Sum은 Luffy 258로 정답, Median은 Luffy 62로 정답, Majority vote는 Luffy 4표로 정답인 반면, Max는 Zoro 88로 오답, Min은 Zoro 19로 오답, Product는 Zoro가 2.3x10^-3으로 오답이다](/images/smart-cctv-tracking/combining-rules.png)
+![결합 규칙 비교 도식. 위쪽에는 Track id-002의 선별된 5개 프레임 f1부터 f5와 Gallery 4명(Luffy, Zoro, Sanji, Usopp)의 유사도를 담은 4행 5열 히트맵 표가 있다. Luffy는 62, 71, 1, 66, 58이고 Zoro는 24, 19, 88, 22, 26, Sanji는 18, 22, 31, 25, 21, Usopp은 15, 17, 24, 19, 23이다. 얼굴이 일부 가려진 f3 열이 빨간 테두리로 강조되어 있는데, 이 프레임에서만 Zoro가 88%로 튀고 Luffy는 1%로 떨어진다. 아래쪽 표는 결합 규칙별 집계 결과다. Sum은 Luffy 258로 정답, Median은 Luffy 62로 정답, Majority vote는 Luffy 4표로 정답인 반면, Max는 Zoro 88로 오답, Min은 Zoro 19로 오답, Product는 Zoro가 2.3x10^-3으로 오답이다](/images/cctv-tracking/combining-rules.png)
 
 *궤적 하나에 대한 유사도 표와, 같은 표에 서로 다른 결합 규칙을 적용했을 때의 판정. f3 한 장 때문에 규칙마다 다른 인물이 선택됩니다 (수치는 설명을 위한 예시 값입니다)*
 
@@ -349,7 +349,7 @@ $$\hat{c} = \arg\max_{c \in C} \; F\big(s_1(c), \dots, s_N(c)\big)$$
 
 Kittler et al.의 결론은 다소 역설적입니다. 이론적으로 가장 정통인 것은 product rule이지만, **실험에서 가장 견고했던 것은 sum rule**이었습니다. 이유는 오차에 대한 민감도입니다. 각 추정치에 섞인 오차를 sum은 평균으로 희석하는 반면, product는 곱셈으로 증폭시켜 하나의 나쁜 추정치가 결과 전체를 지배합니다.
 
-이 성질은 Smart CCTV에 그대로 옮겨옵니다. 프레임 한 장의 임베딩이 나쁘게 잡히는 일은 흔하고, 품질 게이트로도 전부 막지 못합니다. **한 장의 사고가 궤적 전체의 신원을 뒤집어서는 안 된다**는 요구가 곧 sum이나 median을 기본값으로 두라는 뜻이 됩니다. 반대로 max·min·product는 설계상 한 장에 판정을 맡기는 규칙이므로, 쓸 이유가 분명할 때만 선택해야 합니다.
+이 성질은 CCTV 영상 분석에 그대로 옮겨옵니다. 프레임 한 장의 임베딩이 나쁘게 잡히는 일은 흔하고, 품질 게이트로도 전부 막지 못합니다. **한 장의 사고가 궤적 전체의 신원을 뒤집어서는 안 된다**는 요구가 곧 sum이나 median을 기본값으로 두라는 뜻이 됩니다. 반대로 max·min·product는 설계상 한 장에 판정을 맡기는 규칙이므로, 쓸 이유가 분명할 때만 선택해야 합니다.
 
 다만 원 논문의 설정을 그대로 가져올 때 주의할 점이 두 가지 있습니다.
 
@@ -385,4 +385,4 @@ Kittler et al.의 결론은 다소 역설적입니다. 이론적으로 가장 �
 - Jiaolong Yang, Peiran Ren, Dongqing Zhang, Dong Chen, Fang Wen, Hongdong Li, Gang Hua, [Neural Aggregation Network for Video Face Recognition (arXiv:1603.05474)](https://arxiv.org/abs/1603.05474), CVPR 2017 — attention으로 흐리거나 가려진 얼굴의 비중을 낮춰 집합을 벡터 하나로 요약
 - Torsten Schlett, Christian Rathgeb, Olaf Henniger, Javier Galbally, Julian Fierrez, Christoph Busch, [Face Image Quality Assessment: A Literature Survey (arXiv:2009.01103)](https://arxiv.org/abs/2009.01103), ACM Computing Surveys 2022 — FIQA 개괄 및 ERC/EDC 곡선의 정의
 - Josef Kittler, Mohamad Hatef, Robert P. W. Duin, Jiri Matas, [On Combining Classifiers](https://ieeexplore.ieee.org/document/667881), IEEE TPAMI 20(3), 1998 — 「Track에 어떤 person_id를 붙일 것인가」의 결합 규칙(sum·product·max·min·median·majority vote)과, product 대비 sum rule이 추정 오차에 더 견고하다는 민감도 분석
-- 같은 시리즈: <a href="#" data-series-post="2026-09-10-smart-cctv-probe-evaluation.md">Smart CCTV, 문제는 알고리즘일까 영상 품질일까</a> — 「정렬된 도구는 감이 아니라 측정으로 고른다」의 세 단계(오라클 ERC 상한, 인물 단위 부트스트랩 AUROC, ERC 기반 임계값 결정)를 5\~6절에서 자세히 다룹니다
+- 같은 시리즈: <a href="#" data-series-post="2026-09-10-cctv-probe-evaluation.md">CCTV 영상 분석, 문제는 알고리즘일까 영상 품질일까</a> — 「정렬된 도구는 감이 아니라 측정으로 고른다」의 세 단계(오라클 ERC 상한, 인물 단위 부트스트랩 AUROC, ERC 기반 임계값 결정)를 5\~6절에서 자세히 다룹니다

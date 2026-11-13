@@ -1,16 +1,16 @@
 ---
-title: "Smart CCTV, 문제는 알고리즘일까 영상 품질일까"
+title: "CCTV 영상 분석, 문제는 알고리즘일까 영상 품질일까"
 date: 2026-09-10
 category: ai
-summary: Smart CCTV의 오인식·미인식 원인을 '알고리즘'과 '입력 영상의 정보량'으로 분리하는 Probe Quality Evaluation을 정리합니다. Intra/Inter-Similarity를 쌍의 범위별로 나누는 법, 분리 격차와 LOO 식별로 판정하는 법, 품질 점수가 정말 식별 성패를 예측하는지 검증하는 법, 프레임 선별이 도달할 수 있는 성능 한계 측정 법까지 다룹니다.
-tags: ["Smart CCTV", "Face Recognition", "Evaluation", "Data Quality", "Computer Vision"]
-series: Smart CCTV
+summary: CCTV 영상 분석의 오인식·미인식 원인을 '알고리즘'과 '입력 영상의 정보량'으로 분리하는 Probe Quality Evaluation을 정리합니다. Intra/Inter-Similarity를 쌍의 범위별로 나누는 법, 분리 격차와 LOO 식별로 판정하는 법, 품질 점수가 정말 식별 성패를 예측하는지 검증하는 법, 프레임 선별이 도달할 수 있는 성능 한계 측정 법까지 다룹니다.
+tags: ["CCTV", "Face Recognition", "Evaluation", "Data Quality", "Computer Vision"]
+series: CCTV 영상 분석
 series_order: 1
 ---
 
 > **TL;DR**
 >
-> Smart CCTV에서 오인식·미인식이 발생했을 때, 많은 원인은 의외로 알고리즘이 아닌 **데이터에서 발생합니다.** 데이터를 보지 않고 알고리즘만 바라볼 경우 모델만 계속 교체하면서 카메라 각도 하나로 해결될 문제를 붙잡고 있게 됩니다.
+> CCTV 영상 분석에서 오인식·미인식이 발생했을 때, 많은 원인은 의외로 알고리즘이 아닌 **데이터에서 발생합니다.** 데이터를 보지 않고 알고리즘만 바라볼 경우 모델만 계속 교체하면서 카메라 각도 하나로 해결될 문제를 붙잡고 있게 됩니다.
 >
 > **Probe Quality Evaluation**은 CCTV영상에서 face bbox GT를 라벨링한 뒤, **얼굴 등록 DB를 아예 쓰지 않고** 세 가지 질문에 순서대로 답하는 과정입니다.
 >
@@ -38,7 +38,7 @@ series_order: 1
 - **정의**: Probe와 비교할 수 있도록 미리 등록되어 있는 **참조 데이터베이스(Reference DB)** 집합
 - **역할**: Probe가 들어왔을 때 "이 중에 일치하는 사람이 있는가?"를 찾기 위해 뒤지는 대상
 - **예시**
-    - Smart CCTV 시스템에 저장된 **사람 사진 DB**
+    - CCTV 영상 분석 시스템에 저장된 **사람 사진 DB**
     - 여권 정보 시스템에 저장된 **여권 사진 DB**
     - 기업 출입 시스템에 등록된 **전 직원 사원증 사진 DB**
 
@@ -46,7 +46,7 @@ series_order: 1
 
 ## 2. 왜 Probe Quality를 측정해야 하는가
 
-Smart CCTV 시스템은 Face Embedder(e.g., insightface) 모델로 Probe와 Gallery 간의 유사도(Similarity)를 측정하여 인물을 식별합니다. 운영 중 오인식이나 미인식이 발생할 때, 원인은 크게 두 가지로 나뉩니다.
+CCTV 영상 분석 시스템은 Face Embedder(e.g., insightface) 모델로 Probe와 Gallery 간의 유사도(Similarity)를 측정하여 인물을 식별합니다. 운영 중 오인식이나 미인식이 발생할 때, 원인은 크게 두 가지로 나뉩니다.
 
 1. **알고리즘 문제**: 데이터에 신원 정보가 충분한데 모델 성능이나 Threshold 설정이 미흡한 경우 → 소프트웨어 개선으로 해결 가능
 2. **데이터 품질 문제 (여기선 Probe Quality로 제한)**: 화질 저하, 각도, 얼굴 픽셀 부족으로 **임베딩에 신원 정보 자체가 담기지 않는** 경우 → 소프트웨어로 일부 보완할 수 있지만, 하드웨어·환경 개선이 비용적으로 더 저렴한 경우가 많음

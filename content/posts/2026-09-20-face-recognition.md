@@ -1,9 +1,9 @@
 ---
-title: "Smart CCTV, 얼굴 인식 방법"
+title: "CCTV 영상 분석, 얼굴 인식 방법"
 date: 2026-09-21
 category: ai
 summary: CCTV에 찍힌 얼굴(Probe)이 등록 DB(Gallery)의 누구인지 판정하기까지의 전 과정을 정리합니다. 얼굴을 512차원 벡터로 바꾸는 Embedder, 코사인 유사도가 비교 기준이 된 이유, Detection → Alignment → Representation 3단계의 역할 분담, InsightFace `app.get()` 한 줄의 내부 동작과 `norm_crop`의 아핀 변환, 사전학습 모델의 라이선스 제약과 대안, CPU 정렬과 GPU 배치 추론을 분리하는 속도 최적화, Detector를 교체할 때 맞춰야 할 랜드마크 규격, 그리고 Gallery와 Probe 파이프라인이 어긋났을 때 벌어지는 일까지 다룹니다.
-tags: ["Smart CCTV", "Face Recognition", "InsightFace", "ArcFace", "Computer Vision"]
+tags: ["CCTV", "Face Recognition", "InsightFace", "ArcFace", "Computer Vision"]
 ---
 
 > **TL;DR**
@@ -32,7 +32,7 @@ tags: ["Smart CCTV", "Face Recognition", "InsightFace", "ArcFace", "Computer Vis
 - **정의**: Probe와 비교할 수 있도록 미리 등록되어 있는 **참조 데이터베이스(Reference DB)** 집합
 - **역할**: Probe가 들어왔을 때 "이 중에 일치하는 사람이 있는가?"를 찾기 위해 뒤지는 대상
 - **예시**
-    - Smart CCTV 시스템에 미리 저장된 **사람 사진 DB**
+    - CCTV 영상 분석 시스템에 미리 저장된 **사람 사진 DB**
     - 여권 정보 시스템에 저장된 **여권 사진 DB**
     - 기업 출입 시스템에 등록된 **전 직원 사원증 사진 DB**
 
