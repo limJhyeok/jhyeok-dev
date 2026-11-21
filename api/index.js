@@ -2,7 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { getAllPosts, getPost } from './lib/posts.js';
-import { readTemplate, renderPostPage, renderNotFoundPage, slugToId, idToSlug } from './lib/page.js';
+import {
+  readTemplate, renderPostPage, renderNotFoundPage, renderSitemap, renderRobots, slugToId, idToSlug,
+} from './lib/page.js';
 
 const app = express();
 
@@ -87,6 +89,17 @@ app.get('/post/:slug', async (req, res) => {
     html = renderNotFoundPage(template);
   }
   res.type('html').send(liveReload ? liveReload.injectClient(html) : html);
+});
+
+// ============ Sitemap / robots ============
+app.get('/sitemap.xml', async (req, res) => {
+  res.set('Cache-Control', cacheControl('public, s-maxage=3600, stale-while-revalidate=86400'));
+  res.type('application/xml').send(renderSitemap(await getAllPosts(), siteUrl(req)));
+});
+
+app.get('/robots.txt', (req, res) => {
+  res.set('Cache-Control', cacheControl('public, s-maxage=86400'));
+  res.type('text/plain').send(renderRobots(siteUrl(req)));
 });
 
 // ============ Static Files (Fallback) ============

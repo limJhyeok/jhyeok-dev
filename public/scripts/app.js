@@ -389,7 +389,7 @@ function renderPosts() {
 
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   postsList.innerHTML = seriesHead + filtered.slice(pageStart, pageStart + PAGE_SIZE).map(post => `
-    <div class="post-item" data-post-id="${post.id}">
+    <a class="post-item" href="${routeToUrl({ view: 'post', id: post.id })}">
       ${post.series ? `
         <div class="post-item-series">
           <span class="series-badge-name">${post.series} 시리즈</span>
@@ -409,18 +409,13 @@ function renderPosts() {
           ${post.tags.map(tag => `<span class="post-tag">#${tag}</span>`).join('')}
         </div>
       ` : ''}
-    </div>
+    </a>
   `).join('');
 
   renderPagination(filtered.length);
 
   postsList.querySelector('.series-back')
     ?.addEventListener('click', () => navigate({ view: 'series', series: null }));
-
-  document.querySelectorAll('.post-item').forEach(item => {
-    const postId = item.dataset.postId;
-    item.addEventListener('click', () => navigate({ view: 'post', id: postId }));
-  });
 
   document.querySelectorAll('.post-item-excerpt').forEach(el => {
     renderMathInElement(el, {
@@ -492,7 +487,7 @@ function buildSeriesToc(meta, currentId) {
     const isCurrent = p.id === currentId;
     const title = isCurrent
       ? `<span class="series-toc-title">${p.title}<span class="series-toc-here">현재 글</span></span>`
-      : `<a class="series-toc-title" href="#" data-series-post="${p.id}">${p.title}</a>`;
+      : `<a class="series-toc-title" href="${routeToUrl({ view: 'post', id: p.id })}">${p.title}</a>`;
     return `
       <li class="series-toc-item${isCurrent ? ' current' : ''}">
         <span class="series-toc-num">${p.seriesOrder}</span>
@@ -578,13 +573,6 @@ async function showPostDetail(postId) {
       });
     });
 
-    contentEl.querySelectorAll('[data-series-post]').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        navigate({ view: 'post', id: link.dataset.seriesPost });
-      });
-    });
-
     contentEl.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
     renderMathInElement(contentEl, {
       delimiters: [
@@ -662,7 +650,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // 본문 속 다른 글 링크(/post/<slug>)는 페이지를 새로 불러오지 않고 라우터로 넘긴다.
+  // 글 링크(/post/<slug>) — 목록 항목, 시리즈 목차, 본문 속 다른 글 — 는 진짜 href 를 가져
+  // 크롤러가 따라갈 수 있게 두고, 클릭만 가로채 페이지를 새로 불러오지 않고 라우터로 넘긴다.
   // 새 탭 열기(수정키·휠 클릭)는 브라우저 기본 동작에 맡긴다.
   document.addEventListener('click', (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;

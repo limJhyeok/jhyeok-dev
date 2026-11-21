@@ -66,3 +66,30 @@ export function renderPostPage(template, { meta, content, slug, siteUrl }) {
 export function renderNotFoundPage(template) {
   return template.replace(HEAD_END, `\n    <meta name="robots" content="noindex" />\n  </head>`);
 }
+
+// 글 고유 주소 목록. 목록 화면들은 해시 주소라 크롤러에게는 / 하나로 보이므로 / 만 넣는다.
+export function renderSitemap(posts, siteUrl) {
+  const urls = [
+    { loc: `${siteUrl}/` },
+    ...posts.map(p => ({
+      loc: `${siteUrl}/post/${encodeURIComponent(idToSlug(p.id))}`,
+      lastmod: p.date,
+    })),
+  ];
+  const entries = urls.map(({ loc, lastmod }) =>
+    `  <url><loc>${escapeHtml(loc)}</loc>${lastmod ? `<lastmod>${escapeHtml(lastmod)}</lastmod>` : ''}</url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${entries.join('\n')}
+</urlset>
+`;
+}
+
+// Sitemap 은 절대 URL 이어야 해서 정적 파일이 아니라 요청마다 만든다
+export function renderRobots(siteUrl) {
+  return `User-agent: *
+Allow: /
+
+Sitemap: ${siteUrl}/sitemap.xml
+`;
+}
