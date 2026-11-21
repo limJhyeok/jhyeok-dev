@@ -4,12 +4,16 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": "content/**"
+      "includeFiles": "{content/**,public/index.html}"
     }
   },
   "rewrites": [
     {
       "source": "/api/:path*",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/post/:slug",
       "destination": "/api/index.js"
     }
   ]

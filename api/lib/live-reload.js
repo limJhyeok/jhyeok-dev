@@ -83,14 +83,15 @@ export function attachLiveReload(app) {
     });
   }
 
-  // index.html에만 클라이언트 스크립트를 주입한다 (배포 HTML은 손대지 않음).
+  // 서버가 내보내는 HTML(index.html, /post/<slug>)에만 클라이언트 스크립트를 주입한다 (배포 HTML은 손대지 않음).
+  const injectClient = html => html.replace('</body>', `${CLIENT_SCRIPT}\n</body>`);
   const sendIndex = (_, res) => {
     const html = fs.readFileSync(path.join('public', 'index.html'), 'utf-8');
     res.set('Cache-Control', 'no-store');
-    res.type('html').send(html.replace('</body>', `${CLIENT_SCRIPT}\n</body>`));
+    res.type('html').send(injectClient(html));
   };
   app.get(['/', '/index.html'], sendIndex);
 
   console.log(`[live-reload] watching ${WATCH_DIRS.join(', ')}/ (api/ → server restart)`);
-  return sendIndex;
+  return { sendIndex, injectClient };
 }

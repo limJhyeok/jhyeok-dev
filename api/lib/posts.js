@@ -5,7 +5,7 @@ import { parseFrontmatter } from './frontmatter.js';
 const POSTS_DIR = path.join(process.cwd(), 'content/posts');
 const EXCERPT_LENGTH = 160;
 
-function makeExcerpt(content) {
+export function makeExcerpt(content) {
   const plain = content
     .replace(/```[\s\S]*?```/g, '')          // fenced code blocks
     .replace(/`[^`]+`/g, '')                 // inline code
