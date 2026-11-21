@@ -11,7 +11,7 @@ const CLIENT_SCRIPT = `<script>
 (() => {
   const KEY = '__live_reload_scroll';
   const reload = () => {
-    try { sessionStorage.setItem(KEY, JSON.stringify({ hash: location.hash, y: scrollY })); } catch {}
+    try { sessionStorage.setItem(KEY, JSON.stringify({ url: location.pathname + location.hash, y: scrollY })); } catch {}
     location.reload();
   };
 
@@ -19,10 +19,10 @@ const CLIENT_SCRIPT = `<script>
   // 페이지가 충분히 길어질 때까지 기다렸다가 복원한다.
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(KEY)); sessionStorage.removeItem(KEY); } catch {}
-  if (saved && saved.hash === location.hash && saved.y > 0) {
+  if (saved && saved.url === location.pathname + location.hash && saved.y > 0) {
     const started = Date.now();
     const timer = setInterval(() => {
-      const isPost = location.hash.startsWith('#/post/');
+      const isPost = location.pathname.startsWith('/post/');
       const ready = !isPost || document.getElementById('post-detail')?.classList.contains('active');
       if (ready && document.documentElement.scrollHeight >= saved.y + innerHeight) {
         clearInterval(timer);

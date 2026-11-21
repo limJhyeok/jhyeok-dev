@@ -22,7 +22,7 @@ series_order: 3
 
 > 이 글은 [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) 저장소의 커밋 [`4ce7c03`](https://github.com/sierra-research/tau2-bench/tree/4ce7c03)을 기준으로 소스 코드를 분석했습니다.
 
-[이전 글](#/post/2026-10-22-tau-bench.md)에서는 τ-bench 논문을 정리했습니다. 이 글은 그 후속인 **τ²-bench**의 airline 도메인에서 직접 Agent를 돌려 보고, 평가 결과를 근거로 Agent를 개선한 과정을 다룹니다. 순서는 이렇습니다.
+[이전 글](/post/2026-10-22-tau-bench)에서는 τ-bench 논문을 정리했습니다. 이 글은 그 후속인 **τ²-bench**의 airline 도메인에서 직접 Agent를 돌려 보고, 평가 결과를 근거로 Agent를 개선한 과정을 다룹니다. 순서는 이렇습니다.
 
 1. **채점 코드 읽기** (1~3장): Task 하나를 골라, 평가기 코드가 Pass/Fail을 어떻게 정하는지 따라갑니다.
 2. **실험 설계와 train 실패 분석** (4~5장): 가장 단순한 Agent를 train에서 돌리고, 실패를 논문과 같은 틀로 분류합니다.
@@ -714,5 +714,5 @@ Train trace를 보고 규칙을 만들었으니, train에 과적합했다는 의
 
 ### 시리즈 이전 글
 
-- [AI Agent는 어떻게 평가할까](#/post/2026-09-09-ai-agent-evaluation.md)
-- [τ-bench, 사용자와 대화하는 Agent를 평가하는 법](#/post/2026-10-22-tau-bench.md)
+- [AI Agent는 어떻게 평가할까](/post/2026-09-09-ai-agent-evaluation)
+- [τ-bench, 사용자와 대화하는 Agent를 평가하는 법](/post/2026-10-22-tau-bench)

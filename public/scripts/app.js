@@ -154,26 +154,35 @@ async function loadPosts() {
 
 
 
-// ---- 해시 라우팅 ----
-// #/            전체 목록 1페이지      #/2       전체 목록 2페이지
-// #/dev         카테고리 목록 1페이지   #/ai/3    카테고리 목록 3페이지
-// #/series      시리즈 목록            #/series/<이름>/2  시리즈 글 2페이지
-// #/post/<id>   글 상세
-// 그 외(본문 각주의 #appendix 같은 인-페이지 앵커)는 라우트가 아니므로 건드리지 않는다.
-const POST_ROUTE_PREFIX = 'post/';
+// ---- 라우팅 ----
+// 글 상세만 경로, 나머지는 해시다. 글은 미리보기·검색을 위해 서버가 주소별로 <head> 를 채워 줘야 해서
+// 고유 경로가 필요하고, 목록 화면들은 그럴 필요가 없어 해시로 둔다.
+// /post/<slug>  글 상세 (slug = 파일명에서 .md 를 뺀 것. 뒤에 붙는 #appendix 는 본문 앵커)
+// /             전체 목록 1페이지      /#/2       전체 목록 2페이지
+// /#/dev        카테고리 목록 1페이지   /#/ai/3    카테고리 목록 3페이지
+// /#/series     시리즈 목록            /#/series/<이름>/2  시리즈 글 2페이지
+// 목록 화면에서 #/ 로 시작하지 않는 해시는 라우트가 아니므로 건드리지 않는다.
+const POST_PATH_PREFIX = '/post/';
 // 첫 세그먼트로 예약된 이름 — 같은 이름의 카테고리는 만들 수 없다
 const SERIES_ROUTE = 'series';
 
+// 서버가 글 주소에는 글 제목을 넣어 보내므로, 화면을 바꿀 때 탭 제목도 같이 맞춘다
+const SITE_TITLE = 'LimJhyeok - AI Engineer Blog';
+
+const idToSlug = id => id.replace(/\.md$/, '');
+const slugToId = slug => `${slug}.md`;
+
 function parseRoute() {
-  const hash = location.hash;
+  const { pathname, hash } = location;
+  // 글 주소의 해시는 본문 앵커라 라우트에 영향을 주지 않는다
+  if (pathname.startsWith(POST_PATH_PREFIX)) {
+    return { view: 'post', id: slugToId(decodeURIComponent(pathname.slice(POST_PATH_PREFIX.length))) };
+  }
+
   if (hash === '' || hash === '#') return { view: 'list', filter: 'all', page: 1 };
   if (!hash.startsWith('#/')) return null;
 
   const raw = decodeURIComponent(hash.slice(2));
-  if (raw.startsWith(POST_ROUTE_PREFIX)) {
-    return { view: 'post', id: raw.slice(POST_ROUTE_PREFIX.length) };
-  }
-
   // 숫자만인 세그먼트는 페이지 번호, 아니면 카테고리 (카테고리명과 겹치지 않는다)
   const [first = '', second = '', third = ''] = raw.split('/');
   const isPageNum = seg => /^\d+$/.test(seg);
@@ -190,31 +199,38 @@ function parseRoute() {
   return { view: 'list', filter, page: isPageNum(pageSeg) ? Number(pageSeg) : 1 };
 }
 
-function routeToHash(route) {
-  if (route.view === 'post') return `#/${POST_ROUTE_PREFIX}${encodeURIComponent(route.id)}`;
+function routeToUrl(route) {
+  if (route.view === 'post') return `${POST_PATH_PREFIX}${encodeURIComponent(idToSlug(route.id))}`;
 
+  let segments;
   if (route.view === 'series') {
     const name = route.series ? encodeURIComponent(route.series) : '';
     const seriesPage = (route.page ?? 1) > 1 && name ? String(route.page) : '';
-    return `#/${[SERIES_ROUTE, name, seriesPage].filter(Boolean).join('/')}`;
+    segments = [SERIES_ROUTE, name, seriesPage];
+  } else {
+    const filter = route.filter === 'all' ? '' : encodeURIComponent(route.filter);
+    const page = (route.page ?? 1) > 1 ? String(route.page) : '';
+    segments = [filter, page];
   }
-
-  const filter = route.filter === 'all' ? '' : encodeURIComponent(route.filter);
-  const page = (route.page ?? 1) > 1 ? String(route.page) : '';
-  return `#/${[filter, page].filter(Boolean).join('/')}`;
+  const path = segments.filter(Boolean).join('/');
+  return path ? `/#/${path}` : '/';
 }
 
-// 클릭은 해시만 바꾸고, 실제 렌더링은 applyRoute 한 곳에서만 한다
+// 라우트로 비교할 현재 주소. 글 화면에서는 본문 앵커(해시)를 빼고 본다.
+function currentUrl(route) {
+  return route.view === 'post' ? location.pathname : location.pathname + location.hash;
+}
+
+// 클릭은 주소만 바꾸고, 실제 렌더링은 applyRoute 한 곳에서만 한다.
+// 경로(/post/…)와 해시(/#/…)를 오가야 하므로 location.hash 가 아니라 pushState 를 쓴다.
+// pushState 는 이벤트를 내지 않으므로 applyRoute 를 직접 부르고, 뒤로/앞으로가기는 popstate 가 맡는다.
 function navigate(route) {
-  const hash = routeToHash(route);
-  if (location.hash === hash) {
-    applyRoute(); // 같은 해시면 hashchange 가 안 뜨므로 직접 호출
-    return;
-  }
-  location.hash = hash;
+  const url = routeToUrl(route);
+  if (url !== location.pathname + location.hash) history.pushState(null, '', url);
+  applyRoute();
 }
 
-let renderedHash = null;
+let renderedUrl = null;
 
 function applyRoute() {
   const route = parseRoute();
@@ -238,15 +254,13 @@ function applyRoute() {
     route.page = currentPage;
   }
 
-  const hash = routeToHash(route);
-  // 보정된 주소를 히스토리에 새로 쌓지 않고 조용히 정정 (hashchange 도 안 뜬다).
-  // 단, 해시 없는 첫 화면(/)까지 /#/ 로 바꾸지는 않는다.
-  const atDefaultRoute = hash === '#/' && (location.hash === '' || location.hash === '#');
-  if (hash !== location.hash && !atDefaultRoute) {
-    history.replaceState(null, '', hash);
+  const url = routeToUrl(route);
+  // 보정된 주소를 히스토리에 새로 쌓지 않고 조용히 정정한다. 글 주소는 본문 앵커를 보존한다.
+  if (url !== currentUrl(route)) {
+    history.replaceState(null, '', route.view === 'post' ? url + location.hash : url);
   }
-  if (hash === renderedHash) return; // 각주에서 뒤로 온 경우 등 불필요한 재렌더 방지
-  renderedHash = hash;
+  if (url === renderedUrl) return; // 각주에서 뒤로 온 경우 등 불필요한 재렌더 방지
+  renderedUrl = url;
 
   if (route.view === 'post') {
     showPostDetail(route.id);
@@ -509,7 +523,7 @@ async function showPostDetail(postId) {
     const res = await fetch(`${API_BASE}/posts/${postId}`);
     if (res.status === 404) {
       // 없는 글(파일명이 바뀐 옛 링크 등)은 빈 화면 대신 전체 목록으로 — 없는 카테고리와 같은 처리
-      history.replaceState(null, '', '#/');
+      history.replaceState(null, '', '/');
       applyRoute();
       return;
     }
@@ -580,17 +594,19 @@ async function showPostDetail(postId) {
       ignoredClasses: ['literal-dollar'],
     });
 
+    document.title = `${meta.title} - LimJhyeok`;
     document.querySelector('.posts-section').classList.add('hidden');
     modal.classList.add('active');
     window.scrollTo(0, 0);
 
   } catch (err) {
     console.error('Failed to load post detail:', err);
-    renderedHash = null; // 실패한 라우트를 '렌더 완료'로 남겨두면 재시도가 막힌다
+    renderedUrl = null; // 실패한 라우트를 '렌더 완료'로 남겨두면 재시도가 막힌다
   }
 }
 
 function showListView() {
+  document.title = SITE_TITLE;
   document.getElementById('post-detail').classList.remove('active');
   document.querySelector('.posts-section').classList.remove('hidden');
   window.scrollTo(0, 0);
@@ -646,7 +662,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  window.addEventListener('hashchange', applyRoute);
+  // 본문 속 다른 글 링크(/post/<slug>)는 페이지를 새로 불러오지 않고 라우터로 넘긴다.
+  // 새 탭 열기(수정키·휠 클릭)는 브라우저 기본 동작에 맡긴다.
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const link = e.target.closest(`a[href^="${POST_PATH_PREFIX}"]`);
+    if (!link || link.target) return;
+    e.preventDefault();
+    const slug = decodeURIComponent(new URL(link.href).pathname.slice(POST_PATH_PREFIX.length));
+    navigate({ view: 'post', id: slugToId(slug) });
+  });
+
+  // 뒤로/앞으로가기와 본문 앵커 이동 모두 popstate 로 온다 (pushState 로 경로를 바꾸므로 hashchange 로는 부족)
+  window.addEventListener('popstate', applyRoute);
 
   // 새로고침/딥링크 복원 — 목록을 그리기 전에 필터부터 확정한다
   const initial = parseRoute();
