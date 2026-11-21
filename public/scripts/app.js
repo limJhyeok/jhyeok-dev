@@ -585,7 +585,15 @@ async function showPostDetail(postId) {
     document.title = `${meta.title} - LimJhyeok`;
     document.querySelector('.posts-section').classList.add('hidden');
     modal.classList.add('active');
-    window.scrollTo(0, 0);
+    // 서버가 미리 그려 보낸 본문을 처음 덮어쓰는 경우엔 맨 위로 올리지 않는다 — 그 사이 독자가
+    // 스크롤했을 수 있다. #앵커로 들어왔다면 목차·수식이 들어가며 밀린 앵커 위치로 다시 맞춘다.
+    if ('ssr' in contentEl.dataset) {
+      delete contentEl.dataset.ssr;
+      const anchor = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+      anchor?.scrollIntoView();
+    } else {
+      window.scrollTo(0, 0);
+    }
 
   } catch (err) {
     console.error('Failed to load post detail:', err);

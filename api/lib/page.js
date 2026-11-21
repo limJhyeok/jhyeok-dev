@@ -2,6 +2,7 @@
 // 메신저 미리보기 봇은 JS 를 실행하지 않으므로, 글별 title·description·og 태그는 서버가 넣어야 보인다.
 import fs from 'fs/promises';
 import path from 'path';
+import { marked } from 'marked';
 import { makeExcerpt } from './posts.js';
 
 const TEMPLATE_PATH = path.join(process.cwd(), 'public', 'index.html');
@@ -39,6 +40,27 @@ function injectHead(template, title, tags) {
     .replace(HEAD_END, `\n${tags.map(t => `    ${t}`).join('\n')}\n  </head>`);
 }
 
+// 본문 대체본: JS 를 실행하지 않는(또는 렌더링이 약한) 크롤러를 위한 것이다.
+// 클라이언트의 marked 설정(html-demo, ~ 처리, \$ 마스킹)·KaTeX·목차는 옮기지 않는다 — 텍스트와 링크가
+// 읽히면 충분하고, JS 가 돌면 클라이언트가 그대로 다시 그려 덮어쓴다. 서버·클라이언트 렌더러가
+// 어긋나도 문제되지 않도록 일부러 단순하게 둔다. (marked 버전은 index.html 의 CDN 과 맞춰 고정)
+function injectBody(template, { meta, content }) {
+  const date = meta.date ? new Date(meta.date).toLocaleDateString('ko-KR') : '';
+  const body = `
+          <h1>${escapeHtml(meta.title || '')}</h1>
+          <p>${escapeHtml([date, meta.category].filter(Boolean).join(' · '))}</p>
+          <div>${marked.parse(content)}</div>
+        `;
+  return template
+    .replace('class="posts-section"', 'class="posts-section hidden"')
+    .replace('class="post-detail-view"', 'class="post-detail-view active"')
+    .replace(
+      /(<article id="post-content" class="post-content")>[\s\S]*?(<\/article>)/,
+      // data-ssr: 클라이언트가 이 본문을 덮어쓸 때 독자의 스크롤 위치를 건드리지 않게 하는 표시
+      (_, open, close) => `${open} data-ssr>${body}${close}`,
+    );
+}
+
 const metaTag = (attr, key, value) =>
   `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
 
@@ -59,7 +81,7 @@ export function renderPostPage(template, { meta, content, slug, siteUrl }) {
     ...(meta.tags || []).map(tag => metaTag('property', 'article:tag', tag)),
   ];
 
-  return injectHead(template, `${title} - ${SITE_NAME}`, tags);
+  return injectBody(injectHead(template, `${title} - ${SITE_NAME}`, tags), { meta, content });
 }
 
 // 없는 글: 클라이언트가 목록으로 되돌리지만, 봇이 이 주소를 색인하지 않도록 noindex 를 단다.
