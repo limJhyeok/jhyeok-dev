@@ -149,7 +149,14 @@ main {
 
 .posts-list {
   display: grid;
+
+  /* 기본 열(auto)은 항목의 min-content 보다 좁아지지 않아서, 요약문 속 띄어쓰기 없는 긴 토큰
+     (`torch.autocast`·`torch.compile` 같은)이 모바일에서 목록 전체를 화면 밖으로 밀어낸다 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 2rem;
+
+  /* 열이 좁아진 만큼 긴 토큰은 카드 안에서 줄바꿈한다 (break-word 와 달리 min-content 도 줄여 준다) */
+  overflow-wrap: anywhere;
 }
 
 .post-item {
