@@ -205,7 +205,7 @@ The blog is fully static-content driven — posts come from `content/posts/*.md`
 ---
 title: "글 제목"
 date: 2025-03-01
-category: dev        # used for nav filter (All/Project/Dev/AI)
+category: dev        # used for nav filter (All/Dev/AI)
 tags: ["tag1", "tag2"]
 summary: "Optional. If set, used as excerpt in list view instead of auto-generated."
 ---
